@@ -1,10 +1,13 @@
 [English](README.md) | **Español**
 
-# llama-corral
+<p align="center"><img src="docs/images/corral.svg" alt="Los nombres de las versiones como camélidos en un corral: Alpaca, Bactriano, Cria, Dromedario y un Guanaco demasiado grande para entrar" width="100%"></p>
 
 [![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/robmab/llama-corral)](https://github.com/robmab/llama-corral/releases)
+[![License: MIT](https://img.shields.io/github/license/robmab/llama-corral)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/robmab/llama-corral)](https://github.com/robmab/llama-corral/stargazers)
 
-<p align="center"><img src="docs/images/corral.svg" alt="Los nombres de las versiones como camélidos en un corral: Alpaca, Bactriano, Cria, Dromedario y un Guanaco demasiado grande para entrar" width="820"></p>
+# llama-corral
 
 **Un corral para tus LLM locales.** Ten varios modelos preparados y saca el que
 necesites: un único servidor de [llama.cpp](https://github.com/ggml-org/llama.cpp)
