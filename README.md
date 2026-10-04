@@ -5,7 +5,6 @@
 [![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/robmab/llama-corral)](https://github.com/robmab/llama-corral/releases)
 [![License: MIT](https://img.shields.io/github/license/robmab/llama-corral)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/robmab/llama-corral)](https://github.com/robmab/llama-corral/stargazers)
 
 # llama-corral
 
