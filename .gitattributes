@@ -1,0 +1,15 @@
+# Normaliza saltos de linea en el repo.
+* text=auto
+
+# Scripts de bash siempre con LF: con CRLF, Git Bash no los ejecuta.
+*.sh  text eol=lf
+*.conf text eol=lf
+*.conf.example text eol=lf
+# modelos.ini lo lee llama-server: mejor sin CRLF.
+*.ini text eol=lf
+
+# El lanzador de PowerShell con CRLF, lo habitual en Windows.
+*.ps1 text eol=crlf
+
+*.gguf binary
+*.exe  binary

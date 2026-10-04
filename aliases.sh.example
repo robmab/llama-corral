@@ -1,0 +1,169 @@
+# EJEMPLO de alias de Git Bash para el repo LLM. Para usarlo:
+#   1. cp aliases.sh.example aliases.sh   (aliases.sh no se sube al repo)
+#   2. Ajusta LLM y DEFAULT_MODEL aqui abajo.
+#   3. En C:\Program Files\Git\etc\profile.d\aliases.sh deja solo:
+#        [ -f /d/LLM/aliases.sh ] && . /d/LLM/aliases.sh
+#      (con tu ruta) y abre una terminal nueva de Git Bash.
+#
+# Estructura del repo:
+#   Models/   un .gguf (y su mmproj) por modelo
+#   Router/   router.sh + modelos.ini (unica configuracion de los modelos) + Open WebUI
+#   Servers/  builds de llama.cpp (la activa: SERVER_BUILD en llm.conf)
+#   Tests/    pruebas (llama test)
+#   llm.conf  configuracion general (build activa)
+
+# ------------------------------------------------------------------ AJUSTA ESTO
+# Ruta del repo en formato Git Bash (D:\LLM -> /d/LLM).
+LLM="/c/ruta/a/LLM"
+# Perfil que precarga "llama start" sin argumento: id de una seccion de Router/modelos.ini.
+DEFAULT_MODEL="Mi-Modelo-Codigo"
+# -----------------------------------------------------------------------------
+LLM_CONF="$LLM/llm.conf"
+ROUTER="$LLM/Router/router.sh"
+TESTS="$LLM/Tests"
+
+# Ids de los perfiles de Router/modelos.ini (nombres de seccion, sin [*]), en una linea.
+router_models() {
+  grep -oE '^\[[^]*]+\]' "$LLM/Router/modelos.ini" 2>/dev/null | tr -d '[]' | paste -sd'|' | sed 's/|/ | /g'
+}
+
+# Build activa segun llm.conf (o vacio si no esta definida).
+active_build() {
+  (SERVER_BUILD=""; [ -f "$LLM_CONF" ] && . "$LLM_CONF"; echo "$SERVER_BUILD")
+}
+
+# Sin argumento: lista las builds de Servers/ y marca la activa.
+# Con argumento: la deja como activa en llm.conf (si tiene llama-server.exe).
+server_cmd() {
+  local active; active="$(active_build)"
+  if [ -z "$1" ]; then
+    echo "Builds en $LLM/Servers (activa: ${active:-ninguna}):"
+    local d name
+    for d in "$LLM/Servers"/*/; do
+      name="$(basename "$d")"
+      [ -f "$d/llama-server.exe" ] || { echo "    $name  (sin llama-server.exe)"; continue; }
+      [ "$name" = "$active" ] && echo "  * $name" || echo "    $name"
+    done
+    echo "Cambiar: llama server <carpeta>"
+    return 0
+  fi
+  local new="${1%/}"
+  if [ ! -f "$LLM/Servers/$new/llama-server.exe" ]; then
+    echo "No existe $LLM/Servers/$new/llama-server.exe"; return 1
+  fi
+  if [ "$new" = "$active" ]; then echo "$new ya es la build activa"; return 0; fi
+  if grep -q '^SERVER_BUILD=' "$LLM_CONF" 2>/dev/null; then
+    sed -i "s|^SERVER_BUILD=.*|SERVER_BUILD=\"$new\"|" "$LLM_CONF"
+  else
+    echo "SERVER_BUILD=\"$new\"" >> "$LLM_CONF"
+  fi
+  echo "Build activa: $new  (antes: ${active:-ninguna})"
+  if curl -s -o /dev/null --max-time 2 http://localhost:10001/health; then
+    echo "El router en marcha sigue con la anterior: llama stop y llama start para usar la nueva"
+  fi
+}
+
+# --- Router (Router/modelos.ini): un solo servidor en :10001 para Copilot y Open WebUI ---
+# Muestra los modelos del router y cual esta cargado (o avisa si no hay router).
+router_status() {
+  curl -s --max-time 3 -H "Authorization: Bearer apikey" http://localhost:10001/models 2>/dev/null |
+    python -c "
+import json,sys
+try: d=json.load(sys.stdin)['data']
+except Exception: print('No hay router en :10001 (arrancalo con: llama start)'); sys.exit()
+for m in d:
+    st=(m.get('status') or {}).get('value','?')
+    print(('  * ' if st=='loaded' else '    ')+m['id']+'  ['+st+']')
+"
+}
+
+# Arranca el router en segundo plano y precarga un modelo (por defecto DEFAULT_MODEL).
+router_start() {
+  local model="${1:-$DEFAULT_MODEL}"
+  local log="$LLM/Router/llm-search/logs/router.log"
+  if curl -s -o /dev/null --max-time 2 http://localhost:10001/health; then
+    echo "Ya hay un servidor en :10001:"
+    router_status; return 0
+  fi
+  mkdir -p "$(dirname "$log")"
+  nohup "$ROUTER" > "$log" 2>&1 &
+  echo "Router arrancando (log: $log)"
+  for _ in $(seq 1 30); do curl -s -o /dev/null --max-time 2 http://localhost:10001/health && break; sleep 1; done
+  echo "Cargando $model..."
+  curl -s -o /dev/null -H "Authorization: Bearer apikey" -H "Content-Type: application/json" \
+    -d "{\"model\":\"$model\"}" http://localhost:10001/models/load
+  for _ in $(seq 1 120); do
+    router_status | grep -q "\* $model " && break
+    sleep 1
+  done
+  router_status
+}
+
+llama() {
+  case "$1" in
+    start)
+      # Router con DEFAULT_MODEL precargado (o el modelo que se indique).
+      # Copilot y Open WebUI cambian de modelo solos al elegir otro.
+      router_start "$2"
+      ;;
+    stop)
+      taskkill //IM llama-server.exe //F > /dev/null 2>&1 && echo "llama-server parado" || echo "No habia ningun llama-server"
+      ;;
+    status)
+      echo "Build: $(active_build)  (llm.conf)"
+      router_status
+      ;;
+    server)
+      # Builds de llama.cpp: ver cual se usa o cambiarla (llama server <carpeta>)
+      server_cmd "$2"
+      ;;
+    router)
+      # Igual que start pero en primer plano (Ctrl+C para parar).
+      PRELOAD="$2" "$ROUTER"
+      ;;
+    vram)
+      # Salud de la VRAM: si "compartida" pasa de ~1.2 GB, parte del modelo esta en RAM
+      # (desbordado o VRAM degradada por Windows) y todo va mas lento.
+      powershell -NoProfile -Command '$ids=@((Get-Process llama-server -EA SilentlyContinue).Id); if(-not $ids){"No hay llama-server corriendo"; exit}; $d=0;$s=0; (Get-Counter "\GPU Process Memory(*)\Dedicated Usage","\GPU Process Memory(*)\Shared Usage").CounterSamples | ? { $ids -contains [int]($_.InstanceName -replace "pid_(\d+)_.*","`$1") } | % { if($_.Path -like "*dedicated*"){$d+=$_.CookedValue}else{$s+=$_.CookedValue} }; "Dedicada {0:N2} GB | Compartida {1:N2} GB" -f ($d/1GB),($s/1GB); if($s -gt 1.2GB){"OJO: parte del modelo esta en RAM (va 20-60% mas lento). Cierra apps que usen GPU (navegador...) y relanza; si sigue, reinicia el PC"}else{"OK"}'
+      ;;
+    test)
+      # Pruebas de Tests/ (resto de args -> script), p. ej.:
+      #   llama test velocidad --model <id de modelos.ini>
+      local f=""
+      case "$2" in
+        velocidad)    f="velocidad.py" ;;
+        vision)       f="vision.py" ;;
+        benchmark)    f="benchmark-rapido.py" ;;
+        contexto)     f="contexto.py" ;;
+        muestreo)     f="muestreo.py" ;;
+        razonamiento) f="razonamiento-test.py" ;;
+        agentico)     f="agentico-test.py" ;;
+      esac
+      if [ -n "$f" ]; then
+        (cd "$TESTS" && PYTHONUTF8=1 python "$f" "${@:3}")
+      else
+        echo "Uso: llama test <prueba> [--model ID] [opciones]   (detalles en $LLM/Tests/README.md)"
+        echo "  velocidad     generacion y lectura de prompt a 2k/32k/64k"
+        echo "  vision        imagen 1024 px (perfiles con mmproj)"
+        echo "  benchmark     chequeo rapido de velocidad + aciertos"
+        echo "  contexto      contexto maximo practico antes de que caiga la velocidad"
+        echo "  muestreo      calidad de codigo segun temp/top-p/top-k"
+        echo "  razonamiento  5 tareas de codigo con tests ocultos y deteccion de bucles"
+        echo "  agentico      4 mini-proyectos con herramientas y tests ocultos"
+      fi
+      ;;
+    *)
+      echo "Router (Copilot y Open WebUI cambian de modelo solos):"
+      echo "  llama start [modelo]   arranca el router en segundo plano (por defecto $DEFAULT_MODEL)"
+      echo "  llama status           modelos del router y cual esta cargado"
+      echo "  llama stop             para cualquier llama-server"
+      echo "  llama router [modelo]  como start, pero en primer plano"
+      echo "  Modelos: $(router_models)"
+      echo ""
+      echo "Utilidades:"
+      echo "  llama server [carpeta] build de llama.cpp activa ($LLM/Servers, guardada en llm.conf)"
+      echo "  llama vram             comprueba si el modelo cabe entero en VRAM"
+      echo "  llama test <prueba>    velocidad | vision | benchmark | contexto | muestreo | razonamiento | agentico"
+      ;;
+  esac
+}
