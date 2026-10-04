@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
 """
-Banco de pruebas AGENTICO para llama-server (solo libreria estandar).
+AGENTIC test bench for llama-server (standard library only).
 
-Aqui el modelo trabaja
-como un agente: recibe un mini-proyecto en una carpeta temporal y herramientas
-(list_files, read_file, write_file, run_tests) y debe resolver la tarea en varios
-turnos. Al terminar, el script ejecuta tests OCULTOS que el modelo no ha visto.
+The model works as an agent: it gets a mini-project in a temporary folder and
+tools (list_files, read_file, write_file, run_tests) and must solve the task in
+several turns. At the end, the script runs HIDDEN tests the model has not seen.
 
-Tareas (todas con varios ficheros o con bucle test->corregir):
-  fix_bug_cart    bug en pricing.py que se manifiesta en cart.py
-  add_feature_cli funcion nueva + export en el paquete + flag de CLI
-  rename_refactor renombrar una funcion en 4 ficheros + README sin dejar rastro
-  tdd_ratelimit   implementar una clase desde la especificacion y los tests
+Tasks (all span several files or need a test -> fix loop):
+  fix_bug_cart    bug in pricing.py that shows up in cart.py
+  add_feature_cli new function + package export + CLI flag
+  rename_refactor rename a function across 4 files + README without leftovers
+  tdd_ratelimit   implement a class from the specification and the tests
 
-Por ejecucion mide: exito (tests ocultos), turnos, llamadas a herramientas,
-llamadas mal formadas, tokens, tiempo y por que termino.
+Per run it measures: success (hidden tests), turns, tool calls, malformed calls,
+tokens, time and why it finished.
 
-Uso:
-  python agentico-test.py --selftest          # valida las tareas (no necesita servidor)
-  python agentico-test.py --model Qwen3.6-35B-A3B --tag qwen36        # contra el router (llama start)
-  python agentico-test.py ... --runs 3 --only rename --config "t0.6,temperature=0.6"
+Usage (with the router running: llama start):
+  python agentic-test.py --selftest                    # validates the tasks (no server needed)
+  python agentic-test.py --model <model-id> --tag mine
+  python agentic-test.py ... --runs 3 --only rename --config "t0.6,temperature=0.6"
 """
 import argparse
 import json
@@ -65,7 +64,7 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {}}}},
 ]
 
-# --------------------------------------------------------------------------- tareas
+# --------------------------------------------------------------------------- tasks
 
 TASKS = []
 
@@ -619,7 +618,7 @@ if __name__ == "__main__":
 })
 
 
-# --------------------------------------------------------------------------- utilidades
+# --------------------------------------------------------------------------- helpers
 
 PY_ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8",
           "PYTHONDONTWRITEBYTECODE": "1"}
@@ -721,15 +720,15 @@ def hidden_result(root, task):
     ok, out = run_unittest(root, "_hidden")
     if ok:
         return True, "ok"
-    # nombres de los tests ocultos que fallan, p. ej. "FAIL test_cli_top, ERROR test_export"
+    # names of the hidden tests that fail, e.g. "FAIL test_cli_top, ERROR test_export"
     failed = [f"{m.group(1)} {m.group(2)}" for m in re.finditer(r"^(FAIL|ERROR): (\w+)", out, re.M)]
     return False, ", ".join(failed) or (out.splitlines() or ["?"])[-1][:100]
 
 
-# --------------------------------------------------------------------------- agente
+# --------------------------------------------------------------------------- agent
 
 def run_agent(args, task, params, seed):
-    root = os.path.realpath(tempfile.mkdtemp(prefix="agentico_"))
+    root = os.path.realpath(tempfile.mkdtemp(prefix="agentic_"))
     try:
         write_files(root, task["files"])
         messages = [{"role": "system", "content": SYSTEM},
@@ -789,8 +788,8 @@ def run_agent(args, task, params, seed):
         st["visible_pass"] = visible_ok
         st["final_message"] = (messages[-1].get("content") or "")[:300] if messages[-1]["role"] == "assistant" else ""
         if not st["pass"]:
-            # copia del proyecto tal como lo dejo el modelo, para revisar el fallo
-            dest = os.path.join(f"agentico-fallos-{args.tag}", f"{task['name']}-seed{seed}")
+            # copy of the project as the model left it, to review the failure
+            dest = os.path.join(f"agentic-failures-{args.tag}", f"{task['name']}-seed{seed}")
             shutil.rmtree(dest, ignore_errors=True)
             shutil.copytree(root, dest, ignore=shutil.ignore_patterns("__pycache__"))
             st["failed_copy"] = dest
@@ -812,11 +811,11 @@ def selftest():
             h1, ho = hidden_result(root, t)
             good = (not v0) and (not h0) and v1 and h1
             bad += 0 if good else 1
-            print(f"{t['name']:<18} inicial: visible={'PASA' if v0 else 'falla'} oculto={'PASA' if h0 else 'falla'}"
-                  f"  | con solucion: visible={'PASA' if v1 else 'FALLA'} oculto={'PASA' if h1 else 'FALLA'}"
-                  f"  -> {'OK' if good else 'TAREA MAL DEFINIDA'}")
+            print(f"{t['name']:<18} initial: visible={'PASS' if v0 else 'fail'} hidden={'PASS' if h0 else 'fail'}"
+                  f"  | with solution: visible={'PASS' if v1 else 'FAIL'} hidden={'PASS' if h1 else 'FAIL'}"
+                  f"  -> {'OK' if good else 'BADLY DEFINED TASK'}")
             if not good:
-                print("   visible:", vo[-300:], "\n   oculto:", ho)
+                print("   visible:", vo[-300:], "\n   hidden:", ho)
         finally:
             shutil.rmtree(root, ignore_errors=True)
     sys.exit(1 if bad else 0)
@@ -826,15 +825,15 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", default="http://127.0.0.1:10001/v1/chat/completions")
     ap.add_argument("--key", default="apikey")
-    ap.add_argument("--model", default="Qwen3.6-35B-A3B", help="id del modelo en el router (seccion de modelos.ini)")
-    ap.add_argument("--runs", type=int, default=2, help="repeticiones por tarea y config")
+    ap.add_argument("--model", default="Qwen3.6-35B-A3B", help="model id in the router (section of models.ini)")
+    ap.add_argument("--runs", type=int, default=2, help="repeats per task and config")
     ap.add_argument("--max-turns", type=int, default=25)
-    ap.add_argument("--max-tokens", type=int, default=12288, help="por turno")
+    ap.add_argument("--max-tokens", type=int, default=12288, help="per turn")
     ap.add_argument("--timeout", type=int, default=900)
     ap.add_argument("--tag", default="base")
-    ap.add_argument("--config", action="append", help="nombre,clave=valor,... (repetible)")
-    ap.add_argument("--only", help="solo las tareas cuyo nombre contenga este texto")
-    ap.add_argument("--selftest", action="store_true", help="valida las tareas con su solucion de referencia")
+    ap.add_argument("--config", action="append", help="name,key=value,... (repeatable)")
+    ap.add_argument("--only", help="only tasks whose name contains this text")
+    ap.add_argument("--selftest", action="store_true", help="validates the tasks with their reference solution")
     args = ap.parse_args()
 
     if args.selftest:
@@ -850,18 +849,18 @@ def main():
                 try:
                     r = run_agent(args, task, params, seed=2000 + i)
                 except urllib.error.URLError as e:
-                    sys.exit(f"\nNo hay servidor en {args.url}: {e.reason}\nAbortando.")
+                    sys.exit(f"\nNo server at {args.url}: {e.reason}\nAborting.")
                 except (TimeoutError, KeyError, json.JSONDecodeError) as e:
-                    print(f"  {task['name']:<16} run{i}  ERROR de servidor: {e!r}", flush=True)
+                    print(f"  {task['name']:<16} run{i}  server ERROR: {e!r}", flush=True)
                     continue
                 r.update(config=cname, task=task["name"], run=i, tag=args.tag)
                 results.append(r)
-                print(f"  {task['name']:<16} run{i}  {'PASA ' if r['pass'] else 'FALLA'} "
-                      f"fin={r['finish']:<9} turnos={r['turns']:<3} tools={r['tool_calls']:<3} "
-                      f"mal={r['bad_calls']:<2} tok={r['completion_tokens']:<6} {r['wall_s']:>6.0f}s "
+                print(f"  {task['name']:<16} run{i}  {'PASS ' if r['pass'] else 'FAIL '} "
+                      f"end={r['finish']:<9} turns={r['turns']:<3} tools={r['tool_calls']:<3} "
+                      f"bad={r['bad_calls']:<2} tok={r['completion_tokens']:<6} {r['wall_s']:>6.0f}s "
                       f"ctxmax={r['max_prompt']:<6} {'' if r['pass'] else '(' + r['why'] + ')'}", flush=True)
 
-    print(f"\n{'config':<14}{'tarea':<17}{'pasan':>7}{'turnos':>8}{'tools':>7}{'mal':>5}{'tokens':>8}{'seg':>7}")
+    print(f"\n{'config':<14}{'task':<17}{'pass':>7}{'turns':>8}{'tools':>7}{'bad':>5}{'tokens':>8}{'sec':>7}")
     for cname in configs:
         for task in tasks:
             rs = [r for r in results if r["config"] == cname and r["task"] == task["name"]]
@@ -876,10 +875,10 @@ def main():
         if rs:
             print(f"{cname:<14}{'TOTAL':<17}{sum(r['pass'] for r in rs):>4}/{len(rs):<2}")
 
-    out = f"resultados-agentico-{args.tag}.json"
+    out = f"results-agentic-{args.tag}.json"
     with open(out, "w", encoding="utf-8") as fh:
         json.dump(results, fh, ensure_ascii=False, indent=1)
-    print(f"\nDetalle guardado en {out}")
+    print(f"\nDetails saved to {out}")
 
 
 if __name__ == "__main__":

@@ -1,25 +1,26 @@
-# Modelos y builds de llama.cpp: pesan GB y se descargan aparte.
-# Se conservan las carpetas (.gitkeep) para que la estructura exista al clonar.
+# Models and llama.cpp builds: several GB each, downloaded separately.
+# The folders are kept (.gitkeep) so the layout exists after cloning.
 Models/*
 !Models/.gitkeep
 Servers/*
 !Servers/.gitkeep
 
-# Configuracion local (se versionan llm.conf.example y aliases.sh.example)
+# Local configuration (the *.example files are versioned instead)
 llm.conf
 aliases.sh
+Router/models.ini
 
-# Lanzador compilado: se genera desde Router/llm-search/IALocal-Launcher.ps1 con PS2EXE
-# (comando en Router/llm-search/README.md)
+# Compiled launcher: built from Router/webui/LocalLLM-Launcher.ps1 with PS2EXE
+# (command in Router/webui/README.md)
 *.exe
 
-# Generado al ejecutar
+# Generated at runtime
 logs/
 .webui_secret_key
 __pycache__/
 *.pyc
-Tests/resultados-*.json
-Tests/agentico-fallos-*/
+Tests/results-*.json
+Tests/agentic-failures-*/
 
 # Windows
 *.lnk

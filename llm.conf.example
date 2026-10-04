@@ -1,13 +1,13 @@
-# EJEMPLO de configuracion general de D:\LLM. Copialo como llm.conf (que no se
-# sube al repo) y ajusta los valores:
+# EXAMPLE of the general D:\LLM configuration. Copy it as llm.conf (which is not
+# committed) and adjust the values:
 #   cp llm.conf.example llm.conf
 #
-# La leen Router/router.sh y los alias de Git Bash (comando "llama").
-# Formato bash: NOMBRE="valor", sin espacios alrededor del "=".
+# Read by Router/router.sh and the Git Bash aliases ("llama" command).
+# Bash syntax: NAME="value", no spaces around "=".
 
-# Build de llama.cpp que usa el router: nombre de una carpeta de D:\LLM\Servers
-# que contenga llama-server.exe (p. ej. llama-b11146-bin-win-vulkan-x64).
-#   Ver las disponibles y la activa:  llama server
-#   Cambiarla:                        llama server <carpeta>   (y despues llama stop + llama start)
-#   Probar otra sin cambiarla:        SERVER_BUILD=<carpeta> llama start
+# llama.cpp build used by the router: name of a folder in D:\LLM\Servers that
+# contains llama-server.exe (e.g. llama-b11146-bin-win-vulkan-x64).
+#   List builds and show the active one:  llama server
+#   Switch build:                         llama server <folder>   (then llama stop + llama start)
+#   Try another one without switching:    SERVER_BUILD=<folder> llama start
 SERVER_BUILD="llama-bXXXXX-bin-win-vulkan-x64"

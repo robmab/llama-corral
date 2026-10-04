@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Utilidades compartidas por los scripts de tuning de llama-server. Nada de
-esto se ejecuta solo -- lo importan los demas .py de esta carpeta.
+Shared helpers for the llama-server test scripts. Nothing here runs on its
+own -- the other .py files in this folder import it.
 
-Centraliza lo que en las versiones .ps1 anteriores estaba duplicado en cada
-script: arrancar/parar el server, esperar a que responda, hacer la llamada
-HTTP (con el fix de encoding UTF-8 que nos mordio una vez en PowerShell:
-aqui no aplica porque Python no tiene ese bug, pero se deja explicito por
-si se reutiliza el patron en otro sitio) y parsear la linea de "draft
-acceptance" del log de error del server.
+It centralizes what the earlier .ps1 versions duplicated in every script:
+starting/stopping the server, waiting for it to respond, making the HTTP call
+(with explicit UTF-8 handling: PowerShell 5.1 once bit us with an encoding bug;
+Python does not have it, but it is kept explicit in case the pattern is reused
+elsewhere) and parsing the "draft acceptance" line from the server error log.
 """
 import argparse
 import json
@@ -24,11 +23,10 @@ from datetime import datetime
 
 
 class Tee:
-    """Escribe a la vez en varios streams (consola + fichero). Con esto
-    cada script deja en logs/ una transcripcion COMPLETA de lo que se vio
-    en pantalla, igual que hacia Start-Transcript en los .ps1 -- sin esto,
-    el resumen final solo se veia en la consola y se perdia si no se
-    copiaba a mano."""
+    """Writes to several streams at once (console + file). This way every
+    script leaves in logs/ a COMPLETE transcript of what was shown on screen,
+    like Start-Transcript did in the .ps1 versions -- without it, the final
+    summary was only shown on the console and was lost unless copied by hand."""
     def __init__(self, *streams):
         self.streams = streams
 
@@ -39,19 +37,18 @@ class Tee:
                 s.flush()
 
     def flush(self):
-        # Al salir, Python vacia stdout otra vez aunque el script ya haya
-        # cerrado el log: se salta los streams cerrados.
+        # On exit Python flushes stdout once more even if the script already
+        # closed the log: skip closed streams.
         for s in self.streams:
             if not s.closed:
                 s.flush()
 
 
 def start_transcript(logs_dir, name):
-    """Crea logs/<name>_<timestamp>.log y hace que todo lo que se
-    imprima con print() a partir de ahora se vea en consola Y se guarde
-    ahi. Devuelve (log_path, log_file) -- cierra log_file al terminar el
-    script si quieres ser prolijo, aunque al salir el proceso ya lo hace
-    solo."""
+    """Creates logs/<name>_<timestamp>.log and makes everything printed with
+    print() from now on show on the console AND get saved there. Returns
+    (log_path, log_file) -- close log_file when the script ends if you want to
+    be tidy, although the process does it on exit anyway."""
     os.makedirs(logs_dir, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_path = os.path.join(logs_dir, "%s_%s.log" % (name, stamp))
@@ -66,16 +63,16 @@ DRAFT_ACCEPTANCE_RE = re.compile(
 
 
 def add_common_server_args(parser: argparse.ArgumentParser, default_ctx=40960):
-    """Flags que casi todos los scripts necesitan para poder relanzar el
-    server. Al cambiar de modelo/quant/build solo hay que pasar estos
-    argumentos distintos, sin tocar el codigo de ningun script."""
+    """Flags that scripts which relaunch the server need. When changing
+    model/quant/build only these arguments change, without touching any
+    script's code."""
     g = parser.add_argument_group("server")
     g.add_argument("--exe-dir", required=True,
-                   help="Carpeta donde vive llama-server.exe (la del build, ej. D:/LLM/Servers/llama-b11146-bin-win-vulkan-x64)")
+                   help="Folder containing llama-server.exe (the build, e.g. D:/LLM/Servers/llama-b11146-bin-win-vulkan-x64)")
     g.add_argument("--model-path", required=True,
-                   help="Ruta al .gguf, absoluta o relativa a --exe-dir (ej. D:/LLM/Models/.../archivo.gguf)")
+                   help="Path to the .gguf, absolute or relative to --exe-dir (e.g. D:/LLM/Models/.../file.gguf)")
     g.add_argument("--model-id", required=True,
-                   help="Nombre de modelo que se manda en el campo 'model' de cada request (ej. ornith-1.5-35b-mtp-iq3s)")
+                   help="Model name sent in the 'model' field of each request")
     g.add_argument("--host", default="0.0.0.0")
     g.add_argument("--port", type=int, default=10001)
     g.add_argument("--api-key", default="apikey")
@@ -95,16 +92,16 @@ def add_common_server_args(parser: argparse.ArgumentParser, default_ctx=40960):
     g.add_argument("--spec-draft-n-max", default="2")
     g.add_argument("--spec-draft-p-min", default="0.05")
     g.add_argument("--no-mtp", action="store_true",
-                   help="No añadir --spec-type draft-mtp (para probar sin cabeza de draft)")
+                   help="Do not add --spec-type draft-mtp (to test without a draft head)")
     g.add_argument("--startup-timeout", type=int, default=60)
     return g
 
 
 def base_argv(args, extra_threads=None, load_mode_override=None,
                n_max_override=None, p_min_override=None):
-    """Construye la lista de argumentos de llama-server.exe a partir de los
-    flags comunes, con overrides puntuales para el combo que se este
-    probando en cada script (para no tener que reconstruir todo a mano)."""
+    """Builds the llama-server.exe argument list from the common flags, with
+    one-off overrides for the combination each script is testing (so it does
+    not have to be rebuilt by hand)."""
     load_mode = load_mode_override if load_mode_override is not None else args.load_mode
     n_max = n_max_override if n_max_override is not None else args.spec_draft_n_max
     p_min = p_min_override if p_min_override is not None else args.spec_draft_p_min
@@ -133,8 +130,8 @@ def base_argv(args, extra_threads=None, load_mode_override=None,
 
 
 def stop_llama_server():
-    """Mata cualquier llama-server.exe que quede vivo (defensivo, igual que
-    hacian los .ps1 con Get-Process | Stop-Process)."""
+    """Kills any llama-server.exe still alive (defensive, like the .ps1
+    versions did with Get-Process | Stop-Process)."""
     try:
         subprocess.run(["taskkill", "/F", "/IM", "llama-server.exe"],
                         capture_output=True, timeout=10)
@@ -166,10 +163,9 @@ def wait_server_ready(health_url, timeout_sec):
 
 def call_model(base_url, api_key, model_id, messages, max_tokens=400,
                 timeout=180, extra=None, stream=False):
-    """POST al endpoint /v1/chat/completions, con el body y la respuesta
-    tratados explicitamente como UTF-8 (Python no tiene el bug de
-    Invoke-WebRequest en PS 5.1, pero se deja explicito para que quede
-    claro y sea facil de reusar en otro lenguaje si hiciera falta)."""
+    """POST to /v1/chat/completions, with the body and the response handled
+    explicitly as UTF-8 (Python does not have PowerShell 5.1's Invoke-WebRequest
+    bug, but it is kept explicit so it is clear and easy to port)."""
     body = {"model": model_id, "max_tokens": max_tokens, "stream": stream, "messages": messages}
     if extra:
         body.update(extra)
@@ -184,9 +180,9 @@ def call_model(base_url, api_key, model_id, messages, max_tokens=400,
 
 
 def parse_draft_acceptance(err_log_path, take_last_n=None):
-    """Lee el .err del server y devuelve la lista de stats de 'draft
-    acceptance' que imprime print_timing. Si take_last_n se da, se queda
-    solo con las ultimas N (para descartar el warm-up)."""
+    """Reads the server .err log and returns the list of 'draft acceptance'
+    stats printed by print_timing. With take_last_n, keeps only the last N
+    (to discard the warm-up)."""
     if not os.path.exists(err_log_path):
         return []
     with open(err_log_path, "r", encoding="utf-8", errors="replace") as f:

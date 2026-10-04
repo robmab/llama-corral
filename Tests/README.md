@@ -1,64 +1,58 @@
-# Pruebas
+# Tests
 
-Todas se conectan al router (`llama start`) y aceptan `--model` con el id de una
-seccion de `Router/modelos.ini`: `Qwen3.6-35B-A3B` (por defecto),
-`Qwen3.6-35B-A3B-General` u `Ornith-1.5-9B`. Solo usan la libreria estandar de Python.
+All of them talk to the router (`llama start`) and accept `--model` with the id
+of a section of `Router/models.ini`. They only use the Python standard library.
 
-Se lanzan con `llama test <prueba> [opciones]` o directamente con `python` desde
-esta carpeta. Las que guardan transcripcion la dejan en `tests/logs/`.
+Run them with `llama test <test> [options]` or directly with `python` from this
+folder. The ones that keep a transcript write it to `Tests/logs/`.
 
-| `llama test`   | Script                 | Que mide                                                      | Cuando usarlo                                  |
-|----------------|------------------------|---------------------------------------------------------------|------------------------------------------------|
-| `velocidad`    | `velocidad.py`         | lectura de prompt, generacion y MTP a 2k / 32k / 64k          | tras cambiar parametros o si algo va lento     |
-| `vision`       | `vision.py`            | que la vision funciona y cuanto tarda una imagen 1024 px      | tras cambiar `n-cpu-moe` o el mmproj           |
-| `benchmark`    | `benchmark-rapido.py`  | velocidad + aciertos en unas pocas preguntas, en un minuto    | comprobacion rapida antes y despues de un cambio |
-| `contexto`     | `contexto.py`          | contexto practico maximo: sube el prompt hasta que la velocidad cae | al cambiar `ctx-size` o el tipo de KV     |
-| `muestreo`     | `muestreo.py`          | % de codigo Python que pasa tests segun temp / top-p / top-k  | para decidir el muestreo de un modelo          |
-| `razonamiento` | `razonamiento-test.py` | 5 tareas de codigo con tests ocultos, deteccion de bucles     | calidad de razonamiento de un modelo nuevo     |
-| `agentico`     | `agentico-test.py`     | 4 mini-proyectos con herramientas y tests ocultos             | calidad como agente de un modelo nuevo         |
+| `llama test` | Script               | What it measures                                                | When to use it                              |
+|--------------|----------------------|-----------------------------------------------------------------|---------------------------------------------|
+| `speed`      | `speed.py`           | prompt processing, generation and MTP at 2k / 32k / 64k         | after changing parameters or if it feels slow |
+| `vision`     | `vision.py`          | that vision works and how long a 1024 px image takes            | after changing `n-cpu-moe` or the mmproj    |
+| `benchmark`  | `quick-benchmark.py` | speed + correctness on a few questions, in about a minute       | quick check before and after a change       |
+| `context`    | `context-sweep.py`   | maximum practical context: grows the prompt until speed drops   | when changing `ctx-size` or the KV type     |
+| `sampling`   | `sampling-quality.py`| % of Python code that passes tests per temp / top-p / top-k     | to choose a model's sampling                |
+| `reasoning`  | `reasoning-test.py`  | 5 coding tasks with hidden tests, loop detection                | reasoning quality of a new model            |
+| `agentic`    | `agentic-test.py`    | 4 mini-projects with tools and hidden tests                     | agent quality of a new model                |
 
-Ejemplos:
+Examples:
 
 ```bash
-llama test velocidad --model Ornith-1.5-9B
-llama test vision --model Qwen3.6-35B-A3B-General
-llama test benchmark --label antes-del-cambio
-llama test contexto --max 131072 --step 16384
-llama test muestreo --repeats 2
-llama test razonamiento --lang en --runs 1 --tag qwen36
-llama test agentico --runs 1 --tag qwen36
-llama test agentico --selftest          # valida las tareas, sin servidor
+llama test speed --model <model-id>
+llama test vision --model <vision-model-id>
+llama test benchmark --label before-change
+llama test context --max 131072 --step 16384
+llama test sampling --repeats 2
+llama test reasoning --runs 1 --tag mine
+llama test agentic --runs 1 --tag mine
+llama test agentic --selftest          # validates the tasks, no server needed
 ```
 
-Notas:
-- `razonamiento` en espanol penaliza a los modelos que mezclan espanol en el codigo
-  (nombres de funcion que no coinciden con los tests); `--lang en` mide el
-  razonamiento sin ese efecto.
-- `razonamiento` y `agentico` dejan `resultados-*-<tag>.json` en esta carpeta, y
-  `agentico` copia los proyectos fallidos en `agentico-fallos-<tag>/`.
-- En la sesion de pruebas, `agentico` saturo (varios modelos sacaron 8/8); lo que
-  de verdad separo a los modelos fue una tarea real en Copilot.
-- `common.py` son utilidades compartidas por `contexto`, `muestreo` y `benchmark`.
+Notes:
+- `reasoning` has English (default) and Spanish (`--lang es`) prompts. Models
+  that mix Spanish into identifiers (function names that do not match the tests)
+  fail the Spanish run even when they reason well.
+- `reasoning` and `agentic` write `results-*-<tag>.json` to this folder, and
+  `agentic` copies failed projects to `agentic-failures-<tag>/`.
+- `agentic` tends to saturate (several models scored 8/8); what really told the
+  models apart was a real task in the IDE.
+- `common.py` holds helpers shared by `context`, `sampling` and `benchmark`.
+- The token limits are generous because reasoning counts as output: with tight
+  limits a reasoning model can run out before answering (empty answer = FAIL).
 
-Origen: `contexto`, `muestreo`, `benchmark-rapido` y `common` vienen del repo
-`Ornith-1.5-35B-A3B-MTP-IQ3_S` (01_context_sweep, 03_sampling_quality,
-benchmark_quick), adaptados para pedir el modelo por id al router. Las pruebas que
-arrancaban su propio servidor (02 parametros MTP, 04 fragmentacion de KV, 05 hilos
-y load-mode) no estan aqui: chocan con el router y sus conclusiones ya estan
-aplicadas (MTP n-max 2 / p-min 0.05, sin mlock).
+## Tuning the expert layers in RAM (n-cpu-moe)
 
-## Ajustar las capas de expertos en RAM (n-cpu-moe)
+1. Reboot (degraded VRAM skews the numbers) and keep only the usual apps open.
+2. Change the model's `n-cpu-moe` in `Router/models.ini`.
+3. `llama stop` and `llama start <model-id>`.
+4. `llama test vision --model <model-id>` (if it has vision) and `llama vram`.
+5. `llama test speed --model <model-id>` and `llama vram` again.
 
-1. Reinicia el PC (la VRAM degradada falsea las medidas) y deja abierto solo lo habitual.
-2. Cambia `n-cpu-moe` del modelo en `Router/modelos.ini`.
-3. `llama stop` y `llama start <modelo>`.
-4. `llama test vision --model <modelo>` (si tiene vision) y `llama vram`.
-5. `llama test velocidad --model <modelo>` y otra vez `llama vram`.
+You are looking for the LOWEST value for which `llama vram` still says OK
+(shared memory below ~1.2 GB) after the 64k test. Below that value the model
+overflows into shared memory and gets slower, not faster. Leave one layer of
+margin if the browser will be open.
 
-Buscas el numero mas bajo con el que `llama vram` sigue diciendo OK (compartida
-por debajo de ~1.2 GB) tras la prueba de 64k. Por debajo de ese numero el modelo
-se desborda a memoria compartida y va mas lento, no mas rapido. Deja una capa de
-margen si vas a tener el navegador abierto.
-
-Valores medidos el 4 oct 2026: Qwen codigo 22 (con MTP), Qwen general con
-vision 23 (22 va al limite).
+Measured on an RX 9070 XT 16 GB (Oct 2026): Qwen3.6-35B-A3B IQ4_XS coding
+profile 22 (with MTP), the same model with vision 23 (22 is at the limit).

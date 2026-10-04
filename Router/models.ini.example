@@ -1,0 +1,74 @@
+version = 1
+
+; EXAMPLE of the llama-server router profiles. Copy it as models.ini (which is not
+; committed) and adapt it to your models and GPU:
+;   cp models.ini.example models.ini
+;
+; Each section is a model: the section name is the id that clients (Open WebUI,
+; VS Code Copilot...) send in the "model" field, so it must match exactly the id
+; configured in each client. Keys are llama-server flags without the leading
+; dashes (--n-cpu-moe 22 -> n-cpu-moe = 22). Precedence: command line > model
+; section > [*]. Use absolute paths. Keep comments on their own lines.
+;
+; router.sh starts the router with --models-max 1: requesting a model unloads the
+; current one, so two models are never in VRAM at the same time.
+
+; -------------------------------------------------------------- shared by all
+[*]
+; "llama-server --list-devices" shows the device names
+device = Vulkan0
+n-gpu-layers = 99
+; exact, reproducible layer placement
+fit = off
+; required for quantized KV cache and long contexts
+flash-attn = on
+parallel = 1
+jinja = true
+reasoning = on
+reasoning-preserve = false
+batch-size = 2048
+ubatch-size = 512
+top-p = 0.95
+top-k = 20
+min-p = 0
+repeat-penalty = 1.0
+; MTP speculative decoding: only for models that ship an MTP/nextn head
+; (e.g. repos ending in -MTP-GGUF). Remove these three lines otherwise.
+spec-type = draft-mtp
+spec-draft-n-max = 2
+spec-draft-p-min = 0.05
+; seconds to wait when unloading a model before forcing it to close
+stop-timeout = 15
+
+; ------------------------------------------------- coding profile (agent, IDE)
+; A MoE model that does not fully fit in VRAM: n-cpu-moe keeps the experts of the
+; first N layers in RAM. Find the LOWEST N for which "llama vram" still says OK
+; after "llama test speed" (see Tests/README.md): going lower overflows into
+; shared memory and is slower, not faster.
+; reasoning-budget = -1 means no limit; e.g. 8192 caps the reasoning per turn.
+; temp 0.6 / presence 0 is the typical "precise coding" sampling from model cards.
+[My-Coder-Model]
+model = D:/LLM/Models/<model-folder>/<model-file>.gguf
+n-cpu-moe = 22
+ctx-size = 131072
+cache-type-k = q8_0
+cache-type-v = q8_0
+no-mmproj = true
+reasoning-budget = -1
+temp = 0.6
+presence-penalty = 0
+
+; ---------------------------------------------- general profile (with vision)
+; The vision projector (mmproj, ~0.9GB) takes VRAM: a MoE usually needs one more
+; expert layer in RAM than without it. "llama test vision" measures the cost.
+; q4_0 and q8_0 KV run equally fast on Vulkan; q4_0 uses half the memory.
+; temp 1.0 / presence 1.5 is the typical "general" sampling from model cards.
+[My-Vision-Model]
+model = D:/LLM/Models/<model-folder>/<model-file>.gguf
+mmproj = D:/LLM/Models/<model-folder>/<mmproj-file>.gguf
+ctx-size = 131072
+cache-type-k = q4_0
+cache-type-v = q4_0
+reasoning-budget = 8192
+temp = 1.0
+presence-penalty = 1.5

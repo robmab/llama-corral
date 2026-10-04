@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Chequeo rapido de velocidad + aciertos. No relanza el server -- se corre
-ANTES de empezar a tocar nada (baseline de referencia) y DESPUES de cada
-paso del README para confirmar que no se ha roto ni degradado nada.
+Quick speed + correctness check. It does NOT relaunch the server -- run it
+BEFORE changing anything (reference baseline) and AFTER each change to confirm
+nothing broke or got slower.
 
-Correccion sobre la version .ps1 original: la comparacion de aciertos
-ahora ignora acentos y mayusculas/minusculas (con la version anterior,
-"Paris" no matcheaba "París" y salia FALLO aunque el modelo respondiera
-bien -- lo vimos el 2026-09-27).
+Answer matching ignores accents and case (with the original .ps1 version,
+"Paris" did not match "París" and counted as a FAIL even when the model
+answered correctly).
 
-Uso:
-    ./benchmark_quick.sh --model-id ornith-1.5-35b-mtp-iq3s --label mi-config
+Usage (with the router running: llama start):
+    python quick-benchmark.py --model <model-id> --label my-config
 """
 import argparse
 import os
-import re
 import sys
 import time
 import unicodedata
@@ -23,25 +21,25 @@ import unicodedata
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common  # noqa: E402
 
-# Limites holgados: los modelos actuales razonan antes de responder y el
-# razonamiento cuenta como salida. Con 300/800 tokens (pensados para el modelo
-# sin razonamiento) algunas respuestas salian vacias y contaban como FALLO.
+# Generous limits: current models reason before answering and the reasoning
+# counts as output. With 300/800 tokens (meant for a non-reasoning model) some
+# answers came back empty and counted as a FAIL.
 TESTS = [
-    {"name": "Suma simple", "prompt": "Cuanto es 2 + 2", "max_tokens": 2048, "expected": "4"},
-    {"name": "Conocimiento", "prompt": "Cual es la capital de Francia", "max_tokens": 2048, "expected": "Paris"},
-    {"name": "Logica - pregunta trampa",
-     "prompt": "Si un padre tiene 3 hijos y cada uno tiene 1 hermano, cuantos hijos hay en total",
+    {"name": "Simple sum", "prompt": "What is 2 + 2", "max_tokens": 2048, "expected": "4"},
+    {"name": "Knowledge", "prompt": "What is the capital of France", "max_tokens": 2048, "expected": "Paris"},
+    {"name": "Logic - trick question",
+     "prompt": "A father has 3 sons and each of them has 1 brother. How many sons are there in total",
      "max_tokens": 6144, "expected": "3"},
-    {"name": "Logica - Python range()",
-     "prompt": "En Python, list(range(5)) que devuelve exactamente y cuantos elementos tiene la lista",
+    {"name": "Logic - Python range()",
+     "prompt": "In Python, what exactly does list(range(5)) return and how many elements does the list have",
      "max_tokens": 6144, "expected": "5"},
-    {"name": "Logica - bug de mayusculas (Vue)",
-     "prompt": "Revisa este codigo Vue 3 (Composition API) y dime si tiene algun error, y cual:\n"
+    {"name": "Logic - capitalization bug (Vue)",
+     "prompt": "Review this Vue 3 (Composition API) code and tell me whether it has any error, and which one:\n"
                "const Count = ref(0)\nfunction increment() {\n  count.value++\n}",
      "max_tokens": 6144, "expected": "Count"},
-    {"name": "Logica - ref() sin .value",
-     "prompt": "En Vue 3 Composition API, si declaro const count = ref(0) y luego hago count++ directamente "
-               "sin .value, que pasa exactamente",
+    {"name": "Logic - ref() without .value",
+     "prompt": "In the Vue 3 Composition API, if I declare const count = ref(0) and then do count++ directly "
+               "without .value, what exactly happens",
      "max_tokens": 6144, "expected": ".value"},
 ]
 
@@ -56,32 +54,32 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--base-url", default="http://localhost:10001/v1/chat/completions")
     ap.add_argument("--api-key", default="apikey")
-    ap.add_argument("--model-id", "--model", dest="model_id", default="Qwen3.6-35B-A3B", help="id del modelo en el router")
+    ap.add_argument("--model-id", "--model", dest="model_id", default="Qwen3.6-35B-A3B", help="model id in the router (section of models.ini)")
     ap.add_argument("--label", default="benchmark")
     ap.add_argument("--timeout", type=int, default=180)
     args = ap.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     log_path, log_file = common.start_transcript(os.path.join(script_dir, "logs"), "benchmark_" + args.label)
-    print("Log de esta corrida: %s" % log_path)
+    print("Log for this run: %s" % log_path)
 
-    print("=== 1. PRUEBA DE CONEXION ===")
+    print("=== 1. CONNECTION CHECK ===")
     health_url = args.base_url.rsplit("/v1/", 1)[0] + "/health"
     try:
         import urllib.request
         with urllib.request.urlopen(health_url, timeout=10) as r:
             print("Health:", r.read().decode("utf-8"))
     except Exception as e:
-        print("ERROR: servidor no disponible (%s)" % e)
+        print("ERROR: server not available (%s)" % e)
         sys.exit(1)
     print()
 
-    print("=== 0. WARM-UP (descartado) ===")
+    print("=== 0. WARM-UP (discarded) ===")
     try:
         common.call_model(args.base_url, args.api_key, args.model_id,
-                           [{"role": "user", "content": "Hola"}], max_tokens=10, timeout=args.timeout)
+                           [{"role": "user", "content": "Hello"}], max_tokens=10, timeout=args.timeout)
     except Exception as e:
-        print("Warm-up fallo (%s), sigo igualmente" % e)
+        print("Warm-up failed (%s), carrying on anyway" % e)
     print()
 
     results = []
@@ -105,23 +103,23 @@ def main():
         prompt_ms = timings.get("prompt_ms", 0)
         correct = normalize(test["expected"]) in normalize(content)
 
-        print("Tiempo total (E2E): %.2fs" % elapsed)
+        print("Total time (E2E): %.2fs" % elapsed)
         print("Usage tokens (completion/total): %s/%s" % (usage.get("completion_tokens"), usage.get("total_tokens")))
         print("Timings (prompt_ms): %sms" % prompt_ms)
-        print("Velocidad de generacion (predicted_per_second): %.2f tok/s" % gen_tps)
-        print("Respuesta (200): %s" % content[:200].replace("\n", " "))
-        print("Esperado: '%s' -> %s" % (test["expected"], "ACIERTO" if correct else "FALLO"))
+        print("Generation speed (predicted_per_second): %.2f tok/s" % gen_tps)
+        print("Answer (200): %s" % content[:200].replace("\n", " "))
+        print("Expected: '%s' -> %s" % (test["expected"], "PASS" if correct else "FAIL"))
         print()
 
         results.append({"name": test["name"], "gen_tps": gen_tps, "correct": correct})
 
     print("=" * 50)
-    print("  RESUMEN (%s)" % args.label)
+    print("  SUMMARY (%s)" % args.label)
     print("=" * 50)
     n_correct = sum(1 for r in results if r["correct"])
     avg_gen = common.avg([r["gen_tps"] for r in results])
-    print("Aciertos: %d/%d" % (n_correct, len(results)))
-    print("gen tok/s promedio: %.1f" % avg_gen)
+    print("Passed: %d/%d" % (n_correct, len(results)))
+    print("Average gen tok/s: %.1f" % avg_gen)
 
     log_file.close()
 

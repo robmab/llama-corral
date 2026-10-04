@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Compara --temp/--top-p/--top-k para generacion de codigo Python, midiendo
-tasa de aciertos (no velocidad) contra casos de prueba automaticos.
+Compares --temp/--top-p/--top-k for Python code generation, measuring the
+pass rate (not speed) against automatic test cases.
 
-No hace falta relanzar el server entre configuraciones: el endpoint
-OpenAI-compatible de llama.cpp acepta temperature/top_p/top_k por request,
-que pisan el default del server para esa peticion concreta.
+There is no need to relaunch the server between configurations: llama.cpp's
+OpenAI-compatible endpoint accepts temperature/top_p/top_k per request, which
+override the server defaults for that request.
 
-Uso:
-    python3 03_sampling_quality.py
-    python3 03_sampling_quality.py --repeats 5 --base-url http://localhost:10001/v1/chat/completions
+Usage (with the router running: llama start):
+    python sampling-quality.py --model <model-id>
+    python sampling-quality.py --model <model-id> --repeats 5
 """
 import argparse
 import csv
@@ -28,13 +28,15 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common  # noqa: E402
 
-# --- Configuracion por defecto -------------------------------------------------
+# --- Default configuration ----------------------------------------------------
 
 DEFAULT_BASE_URL = "http://localhost:10001/v1/chat/completions"
 DEFAULT_HEALTH_URL = "http://localhost:10001/health"
 DEFAULT_API_KEY = "apikey"
-DEFAULT_MODEL = "Qwen3.6-35B-A3B"  # id del modelo en el router
-DEFAULT_MAX_TOKENS = 500
+DEFAULT_MODEL = "Qwen3.6-35B-A3B"  # model id in the router (section of models.ini)
+# Generous: reasoning counts as output, and with 500 tokens a reasoning model can
+# run out before writing the code (empty answer = FAIL).
+DEFAULT_MAX_TOKENS = 6144
 DEFAULT_REPEATS = 8
 HTTP_TIMEOUT_SEC = 120
 EXEC_TIMEOUT_SEC = 5
@@ -44,17 +46,17 @@ CONFIGS = [
     {"name": "low_t0.2",     "temperature": 0.2, "top_p": 0.90, "top_k": 20},
 ]
 
-# Cada prompt trae su contrato (nombre de funcion) y sus casos de prueba
-# como (args_tuple, expected). Se comparan con == tras ejecutar el codigo
-# extraido de la respuesta del modelo.
+# Each prompt carries its contract (function name) and its test cases as
+# (args_tuple, expected). They are compared with == after running the code
+# extracted from the model's answer.
 PROMPTS = [
     {
         "name": "is_palindrome",
         "func": "is_palindrome",
         "prompt": (
-            "Escribe SOLO el codigo Python de una funcion `is_palindrome(s: str) -> bool` "
-            "que devuelva True si `s` es un palindromo, ignorando mayusculas/minusculas y "
-            "espacios. No incluyas explicaciones ni texto fuera del bloque de codigo."
+            "Write ONLY the Python code of a function `is_palindrome(s: str) -> bool` "
+            "that returns True if `s` is a palindrome, ignoring case and spaces. "
+            "Do not include explanations or any text outside the code block."
         ),
         "cases": [
             (("Anita lava la tina",), True),
@@ -67,9 +69,9 @@ PROMPTS = [
         "name": "flatten",
         "func": "flatten",
         "prompt": (
-            "Escribe SOLO el codigo Python de una funcion `flatten(lst: list) -> list` que "
-            "aplane una lista anidada de cualquier profundidad en una sola lista plana. "
-            "No incluyas explicaciones ni texto fuera del bloque de codigo."
+            "Write ONLY the Python code of a function `flatten(lst: list) -> list` that "
+            "flattens a nested list of any depth into a single flat list. "
+            "Do not include explanations or any text outside the code block."
         ),
         "cases": [
             (([1, [2, 3], [4, [5, 6]]],), [1, 2, 3, 4, 5, 6]),
@@ -82,9 +84,9 @@ PROMPTS = [
         "name": "merge_dicts",
         "func": "merge_dicts",
         "prompt": (
-            "Escribe SOLO el codigo Python de una funcion `merge_dicts(a: dict, b: dict) -> dict` "
-            "que combine dos diccionarios; si una clave existe en ambos, suma sus valores. "
-            "No incluyas explicaciones ni texto fuera del bloque de codigo."
+            "Write ONLY the Python code of a function `merge_dicts(a: dict, b: dict) -> dict` "
+            "that merges two dictionaries; if a key exists in both, add up their values. "
+            "Do not include explanations or any text outside the code block."
         ),
         "cases": [
             (({"a": 1, "b": 2}, {"b": 3, "c": 4}), {"a": 1, "b": 5, "c": 4}),
@@ -96,10 +98,10 @@ PROMPTS = [
         "name": "fix_off_by_one",
         "func": "sum_except_last",
         "prompt": (
-            "El siguiente codigo Python tiene un bug: deberia devolver la suma de todos los "
-            "elementos de `lst` EXCEPTO el ultimo, pero se salta uno de mas. Corrigelo y dame "
-            "SOLO el codigo Python corregido de la funcion `sum_except_last`, sin explicaciones "
-            "ni texto fuera del bloque de codigo.\n\n"
+            "The following Python code has a bug: it should return the sum of all the "
+            "elements of `lst` EXCEPT the last one, but it skips one too many. Fix it and give me "
+            "ONLY the fixed Python code of the function `sum_except_last`, without explanations "
+            "or any text outside the code block.\n\n"
             "```python\n"
             "def sum_except_last(lst):\n"
             "    total = 0\n"
@@ -121,9 +123,9 @@ CODE_FENCE_RE = re.compile(r"```(?:python)?\s*\n(.*?)```", re.DOTALL)
 
 
 def extract_code(text):
-    """Saca el primer bloque ```python ... ``` de la respuesta; si no hay
-    bloque, asume que la respuesta entera es codigo (algunos modelos no
-    ponen fences si el prompt ya dice 'solo el codigo')."""
+    """Takes the first ```python ... ``` block from the answer; if there is no
+    block, assumes the whole answer is code (some models skip the fences when
+    the prompt already says 'only the code')."""
     m = CODE_FENCE_RE.search(text)
     if m:
         return m.group(1).strip()
@@ -157,11 +159,10 @@ def call_model(base_url, api_key, model, prompt_text, max_tokens, sampling, time
 
 
 def run_cases(code, func_name, cases):
-    """Ejecuta el codigo extraido en un subproceso aislado con timeout, y
-    corre cada caso de prueba dentro del MISMO subproceso (import una sola
-    vez), devolviendo la lista de booleanos pass/fail. Si el codigo no
-    compila, la funcion no existe, o hay timeout, todos los casos cuentan
-    como fallo."""
+    """Runs the extracted code in an isolated subprocess with a timeout and
+    runs every test case inside the SAME subprocess (imported once), returning
+    the list of pass/fail booleans. If the code does not compile, the function
+    does not exist or it times out, every case counts as a failure."""
     cases_repr = repr(cases)
     wrapper = (
         code
@@ -214,21 +215,21 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     logs_dir = os.path.join(script_dir, "logs")
     transcript_path, transcript_file = common.start_transcript(logs_dir, "sampling_quality")
-    print("Log de esta corrida: %s" % transcript_path)
+    print("Log for this run: %s" % transcript_path)
 
-    # Chequeo rapido de que el server ya esta arriba (no lo arrancamos aqui,
-    # se asume que ya lo tienes corriendo con la config que quieras probar).
+    # Quick check that the server is already up (it is not started here; it is
+    # assumed to be running with the configuration you want to test).
     try:
         urllib.request.urlopen(args.health_url, timeout=5).read()
     except Exception as e:
-        print("ERROR: no se puede contactar %s (%s). ¿Esta el server arrancado?" % (args.health_url, e))
+        print("ERROR: cannot reach %s (%s). Is the server running?" % (args.health_url, e))
         sys.exit(1)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     raw_log_path = os.path.join(logs_dir, "sampling_quality_raw_%s.csv" % stamp)
 
     raw_rows = []
-    # summary[config_name][prompt_name] = list of bools (pass total del intento)
+    # summary[config_name][prompt_name] = list of bools (whole attempt passed)
     full_pass = {c["name"]: {p["name"]: [] for p in PROMPTS} for c in CONFIGS}
     case_acc = {c["name"]: {p["name"]: [] for p in PROMPTS} for c in CONFIGS}
 
@@ -248,7 +249,7 @@ def main():
                         prm["prompt"], args.max_tokens, cfg, args.timeout,
                     )
                 except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
-                    print(prefix + " -> ERROR llamando al modelo: %s" % e)
+                    print(prefix + " -> ERROR calling the model: %s" % e)
                     full_pass[cfg["name"]][prm["name"]].append(False)
                     case_acc[cfg["name"]][prm["name"]].append(0.0)
                     raw_rows.append([cfg["name"], prm["name"], rep + 1, "call_error", str(e), ""])
@@ -265,7 +266,7 @@ def main():
 
                 status = "OK " if passed_all else "FAIL"
                 extra = (" (%s)" % err) if err else ""
-                print(prefix + " -> %s  %d/%d casos%s" % (status, n_ok, len(results), extra))
+                print(prefix + " -> %s  %d/%d cases%s" % (status, n_ok, len(results), extra))
 
                 raw_rows.append([
                     cfg["name"], prm["name"], rep + 1,
@@ -278,10 +279,10 @@ def main():
         w.writerow(["config", "prompt", "rep", "result", "error", "code"])
         w.writerows(raw_rows)
 
-    # --- Resumen -----------------------------------------------------------
+    # --- Summary -----------------------------------------------------------
     print()
     print("=" * 70)
-    print("  RESUMEN: tasa de aciertos por config (%d repeticiones/prompt)" % args.repeats)
+    print("  SUMMARY: pass rate per config (%d repeats/prompt)" % args.repeats)
     print("=" * 70)
     header = "%-16s" % "config"
     for prm in PROMPTS:
@@ -302,16 +303,16 @@ def main():
         print(line)
 
     print()
-    print("Tasa a nivel de caso individual (mas fina que pass/fail del prompt completo):")
+    print("Per-case rate (finer than pass/fail of the whole prompt):")
     for cfg in CONFIGS:
         all_acc = []
         for prm in PROMPTS:
             all_acc.extend(case_acc[cfg["name"]][prm["name"]])
         avg_acc = statistics.mean(all_acc) * 100 if all_acc else 0.0
-        print("  %-16s -> %.1f%% de casos correctos" % (cfg["name"], avg_acc))
+        print("  %-16s -> %.1f%% of cases correct" % (cfg["name"], avg_acc))
 
     print()
-    print("Log crudo (con el codigo generado en cada intento): " + raw_log_path)
+    print("Raw log (with the code generated in each attempt): " + raw_log_path)
 
     transcript_file.close()
 

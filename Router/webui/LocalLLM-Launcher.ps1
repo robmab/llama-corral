@@ -1,33 +1,34 @@
 # ============================================================================
-# IA Local Launcher (router: Qwen 3.6 + Ornith 9B)
-# Arranca llama-server en modo router (Qwen 3.6 general y Ornith 9B, se elige en el
-# selector de modelo de Open WebUI) + Open WebUI,
-# abre una ventana de app dedicada con el navegador y, cuando esa ventana se
-# cierra, apaga los dos servicios solo.
+# Local LLM Launcher
+# Starts llama-server in router mode (the model is picked in the Open WebUI model
+# selector) + Open WebUI, opens a dedicated browser app window and, when that
+# window is closed, shuts both services down.
 #
-# Este .ps1 es la fuente. Se compila a .exe con PS2EXE (ver README.md de esta
-# carpeta). Editalo aqui, no en el .exe.
+# This .ps1 is the source. It is compiled to an .exe with PS2EXE (see README.md
+# in this folder). Edit it here, not the .exe.
 # ============================================================================
 
-# --------------------------- CONFIGURA ESTO --------------------------------
-# Carpeta donde viven router.sh, modelos.ini y la carpeta llm-search/
-$ProjectDir   = "D:\LLM\Router"
+# --------------------------- CONFIGURE THIS --------------------------------
+# Router folder (router.sh, models.ini, webui/). Worked out from where this file
+# lives: the compiled .exe sits in Router\ and this .ps1 in Router\webui\.
+$here = if ($PSScriptRoot) { $PSScriptRoot } else { [System.AppDomain]::CurrentDomain.BaseDirectory.TrimEnd('\') }
+$ProjectDir = if ((Split-Path $here -Leaf) -eq 'webui') { Split-Path $here -Parent } else { $here }
 
-# Script que arranca llama-server (dentro de $ProjectDir)
+# Script that starts llama-server (inside $ProjectDir)
 $LlamaScriptName = "router.sh"
 
-# Puerto de llama-server (--port en router.sh)
+# llama-server port (--port in router.sh)
 $LlamaPort    = 10001
 
-# Puerto de Open WebUI (el que usa --port en start-open-webui.sh)
+# Open WebUI port (--port in start-open-webui.sh)
 $WebUIPort    = 3000
 
-# Ruta a bash.exe de Git Bash. Si tienes Git for Windows en otra carpeta,
-# cambia esto. Se autodetecta si lo dejas vacio y esta en el PATH.
+# Path to Git Bash's bash.exe. Change it if Git for Windows lives somewhere else.
+# Auto-detected if left empty and bash.exe is on the PATH.
 $BashPath     = "C:\Program Files\Git\bin\bash.exe"
 
-# Tiempos maximos de espera (segundos). Sube WebUITimeout si la primera vez
-# tarda mucho descargando dependencias.
+# Maximum wait times (seconds). Raise WebUITimeout if the first run takes long
+# downloading dependencies.
 $LlamaTimeout = 180
 $WebUITimeout = 420
 # -----------------------------------------------------------------------------
@@ -45,7 +46,7 @@ function Write-Step($msg) {
 }
 
 function Hide-OwnConsole {
-    # GetConsoleWindow() si es fiable para el propio proceso llamante.
+    # GetConsoleWindow() is reliable for the calling process itself.
     try {
         $hwnd = [Native.Win32Window]::GetConsoleWindow()
         if ($hwnd -ne [IntPtr]::Zero) {
@@ -55,11 +56,11 @@ function Hide-OwnConsole {
 }
 
 function Wait-Port($port, $timeoutSec, $label, $logPath = $null) {
-    # Si se da $logPath, en vez de puntos de progreso se muestran las lineas
-    # nuevas que va escribiendo el proceso (que arranca con ventana oculta),
-    # asi se ve el avance real sin necesidad de mostrar ninguna ventana.
+    # With $logPath, instead of progress dots it prints the new lines written by
+    # the process (which starts with a hidden window), so the real progress shows
+    # without having to display any window.
     $deadline = (Get-Date).AddSeconds($timeoutSec)
-    Write-Host "    Esperando a $label (puerto $port)..."
+    Write-Host "    Waiting for $label (port $port)..."
     $lastLineCount = 0
     while ((Get-Date) -lt $deadline) {
         if ($logPath -and (Test-Path $logPath)) {
@@ -74,7 +75,7 @@ function Wait-Port($port, $timeoutSec, $label, $logPath = $null) {
             $tcp.Connect("127.0.0.1", $port)
             if ($tcp.Connected) {
                 $tcp.Close()
-                Write-Host "    $label listo." -ForegroundColor Green
+                Write-Host "    $label ready." -ForegroundColor Green
                 return $true
             }
         } catch {} finally { $tcp.Dispose() }
@@ -97,11 +98,11 @@ function Resolve-Bash {
     if ($BashPath -and (Test-Path $BashPath)) { return $BashPath }
     $cmd = Get-Command bash.exe -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-    throw "No encuentro bash.exe. Edita `$BashPath al principio del script."
+    throw "bash.exe not found. Edit `$BashPath at the top of the script."
 }
 
 function Get-AppCapableBrowser {
-    # Navegadores que soportan --app + --user-data-dir (modo ventana dedicada)
+    # Browsers that support --app + --user-data-dir (dedicated window mode)
     $chromiumNames = @('chrome.exe','msedge.exe','brave.exe','vivaldi.exe','opera.exe','chromium.exe')
 
     try {
@@ -116,7 +117,7 @@ function Get-AppCapableBrowser {
         }
     } catch {}
 
-    # Fallback: Edge, que viene siempre instalado en Windows 10/11
+    # Fallback: Edge, always installed on Windows 10/11
     $edgeCandidates = @(
         "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
         "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
@@ -124,46 +125,46 @@ function Get-AppCapableBrowser {
     )
     foreach ($c in $edgeCandidates) {
         if (Test-Path $c) {
-            Write-Host "    (Tu navegador predeterminado no admite ventana de app aislada; uso Edge para esta ventana)" -ForegroundColor DarkYellow
+            Write-Host "    (Your default browser does not support isolated app windows; using Edge for this window)" -ForegroundColor DarkYellow
             return $c
         }
     }
-    throw "No encuentro un navegador Chromium (ni Edge) para abrir la ventana."
+    throw "No Chromium browser (nor Edge) found to open the window."
 }
 
 # ============================================================================
 Write-Host "=================================================" -ForegroundColor Cyan
-Write-Host "  IA Local - Qwen 3.6 / Ornith 9B + busqueda web" -ForegroundColor Cyan
+Write-Host "  Local LLM - llama.cpp router + Open WebUI" -ForegroundColor Cyan
 Write-Host "=================================================" -ForegroundColor Cyan
 
 $bash = Resolve-Bash
 Set-Location $ProjectDir
 
-$LogDir = Join-Path $ProjectDir "llm-search\logs"
+$LogDir = Join-Path $ProjectDir "webui\logs"
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 $LlamaLog = Join-Path $LogDir "launcher-llama.log"
 $WebUILog = Join-Path $LogDir "launcher-webui.log"
 
 function New-BashScript($path, [string[]]$lines) {
-    # LF puro, sin BOM: un .sh escrito por PowerShell con Set-Content normal
-    # lleva CRLF y a veces BOM, y bash puede atragantarse con eso.
+    # Plain LF, no BOM: a .sh written by PowerShell with a regular Set-Content
+    # gets CRLF and sometimes a BOM, and bash can choke on that.
     $content = ($lines -join "`n") + "`n"
     [System.IO.File]::WriteAllText($path, $content, (New-Object System.Text.UTF8Encoding($false)))
 }
 
-Write-Host "    (Log de esta corrida en: $LlamaLog / $WebUILog)" -ForegroundColor DarkGray
+Write-Host "    (Logs for this run: $LlamaLog / $WebUILog)" -ForegroundColor DarkGray
 
-# Para cualquier llama-server previo (otro lanzador, uno arrancado a mano o un
-# modelo huerfano del router): en modo router cada modelo es un proceso hijo con
-# su propio puerto, asi que no basta con mirar el 10001.
+# Stops any previous llama-server (another launcher, one started by hand, or an
+# orphaned router model): in router mode every model is a child process with its
+# own port, so checking port 10001 is not enough.
 function Stop-AllLlama {
     Get-Process llama-server -ErrorAction SilentlyContinue | ForEach-Object {
         try { Stop-Process -Id $_.Id -Force -ErrorAction Stop } catch {}
     }
 }
-# Un router ya en marcha (arrancado con "llama start" para VS Code) se reutiliza y
-# NO se apaga al cerrar la ventana. Se reconoce porque su /models incluye el
-# estado de cada modelo; un llama-server de un solo modelo no lo trae.
+# A router that is already running (started with "llama start" for VS Code) is
+# reused and NOT stopped when the window closes. It is recognized because its
+# /models includes the status of each model; a single-model llama-server does not.
 function Test-RouterRunning {
     try {
         $r = Invoke-RestMethod -Uri "http://127.0.0.1:$LlamaPort/models" -Headers @{ Authorization = "Bearer apikey" } -TimeoutSec 3
@@ -175,21 +176,20 @@ $OwnsLlama = $true
 $llamaProc = $null
 if (Test-RouterRunning) {
     $OwnsLlama = $false
-    Write-Step "Router ya en marcha (llama start): lo reutilizo y no lo apagare al cerrar."
+    Write-Step "Router already running (llama start): reusing it; it will not be stopped on exit."
 } else {
     if (Get-Process llama-server -ErrorAction SilentlyContinue) {
-        Write-Host "    Hay llama-server en marcha; los paro antes de arrancar el router." -ForegroundColor DarkYellow
+        Write-Host "    llama-server is running; stopping it before starting the router." -ForegroundColor DarkYellow
         Stop-AllLlama
         Start-Sleep -Seconds 3
     }
 
     # --- 1) llama-server -------------------------------------------------------
-    # Arranca con la ventana oculta desde YA (WindowStyle Hidden). Asi no hay
-    # ninguna ventana que luego haya que ocultar a la fuerza (eso es lo que
-    # fallaba: si tienes Windows Terminal como terminal por defecto, a veces
-    # solo minimiza en vez de ocultar cuando se lo pides despues). El progreso
-    # se ve igual, tail del log en esta misma ventana.
-    Write-Step "Arrancando el router de llama-server (los modelos se cargan al elegirlos)..."
+    # Starts with a hidden window from the beginning (WindowStyle Hidden), so no
+    # window has to be force-hidden later (that is what failed: with Windows
+    # Terminal as the default terminal, it sometimes only minimizes when asked
+    # afterwards). Progress is still shown by tailing the log in this window.
+    Write-Step "Starting the llama-server router (models load when selected)..."
     $LlamaScript = Join-Path $LogDir "run-llama.sh"
     New-BashScript $LlamaScript @(
         "cd `"$ProjectDir`" || exit 1"
@@ -201,18 +201,18 @@ if (Test-RouterRunning) {
         -WindowStyle Hidden -PassThru
 
     if (-not (Wait-Port -port $LlamaPort -timeoutSec $LlamaTimeout -label "llama-server" -logPath $LlamaLog)) {
-        Write-Host "llama-server no respondio a tiempo. Revisa el log: $LlamaLog" -ForegroundColor Red
-        Read-Host "Pulsa Enter para salir"
+        Write-Host "llama-server did not respond in time. Check the log: $LlamaLog" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
         exit 1
     }
 }
 
 # --- 2) Open WebUI -----------------------------------------------------------
-Write-Step "Arrancando Open WebUI (en segundo plano; progreso abajo)..."
+Write-Step "Starting Open WebUI (in the background; progress below)..."
 $WebUIScript = Join-Path $LogDir "run-webui.sh"
 New-BashScript $WebUIScript @(
     "cd `"$ProjectDir`" || exit 1"
-    "./llm-search/start-open-webui.sh > `"$WebUILog`" 2>&1"
+    "./webui/start-open-webui.sh > `"$WebUILog`" 2>&1"
 )
 $webuiProc = Start-Process -FilePath $bash `
     -ArgumentList $WebUIScript `
@@ -220,38 +220,38 @@ $webuiProc = Start-Process -FilePath $bash `
     -WindowStyle Hidden -PassThru
 
 if (-not (Wait-Port -port $WebUIPort -timeoutSec $WebUITimeout -label "Open WebUI" -logPath $WebUILog)) {
-    Write-Host "Open WebUI no respondio a tiempo. Revisa el log: $WebUILog" -ForegroundColor Red
-    Read-Host "Pulsa Enter para salir"
+    Write-Host "Open WebUI did not respond in time. Check the log: $WebUILog" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
     exit 1
 }
 
-# --- 3) Navegador en ventana dedicada ---------------------------------------
-Write-Step "Abriendo el navegador..."
+# --- 3) Browser in a dedicated window ----------------------------------------
+Write-Step "Opening the browser..."
 $browserExe = Get-AppCapableBrowser
-$profileDir = Join-Path $env:TEMP "ialocal-webui-profile"
+$profileDir = Join-Path $env:TEMP "localllm-webui-profile"
 
 $browserProc = Start-Process -FilePath $browserExe `
     -ArgumentList "--app=http://localhost:$WebUIPort", "--user-data-dir=$profileDir", "--new-window" `
     -PassThru
 
-Write-Step "Todo en marcha. Ocultando esta ventana; sigue vigilando en segundo plano."
-Write-Host "    (Cierra la ventana del navegador para apagar llama-server y Open WebUI)" -ForegroundColor DarkGray
+Write-Step "All running. Hiding this window; it keeps watching in the background."
+Write-Host "    (Close the browser window to shut down llama-server and Open WebUI)" -ForegroundColor DarkGray
 Start-Sleep -Seconds 2
 
 Hide-OwnConsole
 
-# --- 4) Esperar a que se cierre la ventana del navegador --------------------
+# --- 4) Wait for the browser window to close ---------------------------------
 try {
     Wait-Process -Id $browserProc.Id -ErrorAction Stop
 } catch {
-    # Si el proceso ya no existe al llamar Wait-Process, seguimos igualmente
+    # If the process no longer exists when calling Wait-Process, carry on anyway
 }
 
-# --- 5) Apagar los servicios -------------------------------------------------
+# --- 5) Shut the services down ------------------------------------------------
 if ($OwnsLlama) {
-    Write-Step "Navegador cerrado. Apagando llama-server y Open WebUI..."
+    Write-Step "Browser closed. Shutting down llama-server and Open WebUI..."
 } else {
-    Write-Step "Navegador cerrado. Apagando Open WebUI (el router sigue en marcha para VS Code)..."
+    Write-Step "Browser closed. Shutting down Open WebUI (the router keeps running for VS Code)..."
 }
 Stop-ProcessOnPort -port $WebUIPort
 try { Stop-Process -Id $webuiProc.Id -Force -ErrorAction SilentlyContinue } catch {}
@@ -261,5 +261,5 @@ if ($OwnsLlama) {
     if ($llamaProc) { try { Stop-Process -Id $llamaProc.Id -Force -ErrorAction SilentlyContinue } catch {} }
 }
 
-Write-Host "Listo." -ForegroundColor Green
+Write-Host "Done." -ForegroundColor Green
 Start-Sleep -Seconds 2
