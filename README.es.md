@@ -4,6 +4,8 @@
 
 [![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
 
+<p align="center"><img src="docs/images/corral.svg" alt="Los nombres de las versiones como camélidos en un corral: Alpaca, Bactriano, Cria, Dromedario y un Guanaco demasiado grande para entrar" width="820"></p>
+
 **Un corral para tus LLM locales.** Ten varios modelos preparados y saca el que
 necesites: un único servidor de [llama.cpp](https://github.com/ggml-org/llama.cpp)
 en **modo router** en `localhost:10001`, con un perfil por modelo. Cada petición

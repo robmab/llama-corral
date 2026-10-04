@@ -4,6 +4,8 @@
 
 [![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
 
+<p align="center"><img src="docs/images/corral.svg" alt="The release codenames as camelids in a corral: Alpaca, Bactriano, Cria, Dromedario and a Guanaco too big to get in" width="820"></p>
+
 **A corral for your local LLMs.** Keep several models ready and bring out the one
 you need: a single [llama.cpp](https://github.com/ggml-org/llama.cpp) server in
 **router mode** on `localhost:10001`, with one profile per model. Each request
