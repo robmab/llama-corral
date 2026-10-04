@@ -13,7 +13,9 @@ pick one in their selector. Windows + Git Bash.
 > Built on llama.cpp; not affiliated with Meta's Llama models or with the
 > llama.cpp project.
 
-This README walks through the setup step by step.
+This README walks through the setup step by step. The measurements behind the
+configuration (dense vs MoE, VRAM on Windows, MTP, Vulkan vs ROCm, a real agent
+task) are in [FINDINGS.md](FINDINGS.md).
 
 ## Contents
 
@@ -281,11 +283,8 @@ To change a model's parameters: edit its section in `Router/models.ini`, then
 
 ## Notes
 
-- Lessons from tuning on a Radeon RX 9070 XT (16 GB): Windows can degrade the
-  VRAM after many restarts (reboot fixes it); a MoE in Q4 with some expert layers
-  in RAM beats a dense model in Q3; overflowing VRAM is slower than putting layers
-  in RAM on purpose; MTP adds 15-50% when it fits; long reasoning is the main cost
-  of a local agent; synthetic tests saturate, a real task tells models apart.
+- Measurements and lessons from tuning on a Radeon RX 9070 XT (16 GB):
+  [FINDINGS.md](FINDINGS.md).
 - More detail: [Router/webui/README.md](Router/webui/README.md) (router and
   Open WebUI) and [Tests/README.md](Tests/README.md) (tests and tuning).
 

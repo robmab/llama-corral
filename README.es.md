@@ -13,7 +13,9 @@ en su selector. Windows + Git Bash.
 > Basado en llama.cpp; sin relación con los modelos Llama de Meta ni con el
 > proyecto llama.cpp.
 
-Este README explica la instalación paso a paso.
+Este README explica la instalación paso a paso. Las mediciones en las que se basa
+la configuración (denso frente a MoE, VRAM en Windows, MTP, Vulkan frente a ROCm,
+una tarea real de agente) están en [FINDINGS.es.md](FINDINGS.es.md).
 
 ## Contenido
 
@@ -283,12 +285,8 @@ Para cambiar los parámetros de un modelo: edita su sección en
 
 ## Notas
 
-- Lecciones del ajuste en una Radeon RX 9070 XT (16 GB): Windows puede degradar la
-  VRAM tras muchos arranques (se arregla reiniciando); un MoE en Q4 con algunas
-  capas de expertos en RAM supera a un denso en Q3; desbordar la VRAM es más lento
-  que mandar capas a RAM a propósito; MTP aporta un 15-50% cuando cabe; el
-  razonamiento largo es el principal coste de un agente local; las pruebas
-  sintéticas se saturan y lo que distingue a los modelos es una tarea real.
+- Mediciones y lecciones del ajuste en una Radeon RX 9070 XT (16 GB):
+  [FINDINGS.es.md](FINDINGS.es.md).
 - Más detalle: [Router/webui/README.es.md](Router/webui/README.es.md) (router y
   Open WebUI) y [Tests/README.es.md](Tests/README.es.md) (pruebas y ajuste).
 
