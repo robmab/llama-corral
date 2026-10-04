@@ -1,13 +1,17 @@
 **English** | [Español](README.es.md)
 
-# Local LLM
+# llama-corral
 
-Local language models on a Windows PC, served by a single
-[llama.cpp](https://github.com/ggml-org/llama.cpp) server in **router mode**: one
-server on `localhost:10001` with one profile per model. Each request carries a
-model id and the router loads that profile, unloading the previous one. VS Code
-Copilot (coding agent) and Open WebUI (chat with vision and web search) switch
-models on their own when you pick one in their selector.
+**A corral for your local LLMs.** Keep several models ready and bring out the one
+you need: a single [llama.cpp](https://github.com/ggml-org/llama.cpp) server in
+**router mode** on `localhost:10001`, with one profile per model. Each request
+carries a model id and the router loads that profile, unloading the previous one,
+so only one model is in VRAM at a time. VS Code Copilot (coding agent) and
+Open WebUI (chat with vision and web search) switch models on their own when you
+pick one in their selector. Windows + Git Bash.
+
+> Built on llama.cpp; not affiliated with Meta's Llama models or with the
+> llama.cpp project.
 
 This README walks through the setup step by step.
 
@@ -56,11 +60,11 @@ from their `*.example` template.
 ## 2. Get the repo
 
 ```bash
-git clone <repo-url> /d/LLM
+git clone https://github.com/robmab/llama-corral.git /d/LLM
 cd /d/LLM
 ```
 
-Any location works. The examples below assume `D:\LLM` (`/d/LLM` in Git Bash).
+Any location works (without a target folder, git creates `llama-corral`). The examples below assume `D:\LLM` (`/d/LLM` in Git Bash).
 
 ## 3. Configure the example files
 
