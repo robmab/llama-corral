@@ -54,8 +54,8 @@ from their `*.example` template.
 - A GPU supported by a llama.cpp build (Vulkan works on AMD, NVIDIA and Intel).
 - Python 3 for the tests (standard library only).
 - Optional: [uv](https://docs.astral.sh/uv/) for Open WebUI
-  (`winget install astral-sh.uv`) and the PS2EXE PowerShell module to compile the
-  Open WebUI launcher (`Install-Module ps2exe -Scope CurrentUser`).
+  (`winget install astral-sh.uv`) and, only to compile the Open WebUI launcher
+  yourself, the PS2EXE PowerShell module (`Install-Module ps2exe -Scope CurrentUser`).
 
 ## 2. Get the repo
 
@@ -225,15 +225,28 @@ the API key, use `apikey` (the `--api-key` in `router.sh`).
 
 ### Open WebUI
 
-Compile the launcher once, then double-click it:
+Open WebUI is started by `Router\LocalLLM-Launcher.exe`. The `.exe` is not in
+the repo, so get it in one of two ways:
 
-```powershell
-cd D:\LLM\Router
-Import-Module ps2exe
-Invoke-ps2exe .\webui\LocalLLM-Launcher.ps1 .\LocalLLM-Launcher.exe -title "Local LLM"
-```
+- **Download it (easiest):** take `LocalLLM-Launcher.exe` from the latest
+  [release](https://github.com/robmab/llama-corral/releases) and put it in
+  `Router\`. It must live there: it finds the rest of the project from its own
+  location. It is not signed, so Windows SmartScreen may warn the first time
+  ("More info" > "Run anyway").
+- **Compile it yourself:** the launcher is a PowerShell script
+  (`Router\webui\LocalLLM-Launcher.ps1`). [PS2EXE](https://github.com/MScholtes/PS2EXE)
+  wraps it into an `.exe` so it opens with a double click, without a console
+  command. Same result as the download, built on your machine. In PowerShell:
 
-`Router\LocalLLM-Launcher.exe` starts Open WebUI with `uvx` (no Docker) at
+  ```powershell
+  Install-Module ps2exe -Scope CurrentUser    # first time only
+  cd D:\LLM\Router
+  Invoke-ps2exe .\webui\LocalLLM-Launcher.ps1 .\LocalLLM-Launcher.exe -title "Local LLM"
+  ```
+
+  Recompile only if you change the `.ps1`.
+
+Double-click it: it starts Open WebUI with `uvx` (no Docker) at
 `http://localhost:3000`, opens it in a dedicated browser window and shuts it down
 when that window closes. If `llama start` is already running it reuses that router,
 so VS Code and Open WebUI can work at the same time. Recommended settings and

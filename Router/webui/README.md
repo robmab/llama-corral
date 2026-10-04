@@ -102,7 +102,8 @@ recompile the `.exe`.
 
 ## Compiling the .exe
 
-Needed after cloning (the `.exe` is not committed) and after changing the `.ps1`:
+The `.exe` is not committed. Download it from the [releases](https://github.com/robmab/llama-corral/releases)
+and put it in `Router/`, or compile it yourself (again after changing the `.ps1`):
 
 ```powershell
 cd D:\LLM\Router

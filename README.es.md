@@ -55,8 +55,8 @@ sola vez a partir de su plantilla `*.example`.
   NVIDIA e Intel).
 - Python 3 para las pruebas (solo la librería estándar).
 - Opcional: [uv](https://docs.astral.sh/uv/) para Open WebUI
-  (`winget install astral-sh.uv`) y el módulo PS2EXE de PowerShell para compilar el
-  lanzador de Open WebUI (`Install-Module ps2exe -Scope CurrentUser`).
+  (`winget install astral-sh.uv`) y, solo para compilar tú el lanzador de Open WebUI,
+  el módulo PS2EXE de PowerShell (`Install-Module ps2exe -Scope CurrentUser`).
 
 ## 2. Obtener el repositorio
 
@@ -227,15 +227,28 @@ y el router lo usa para elegir el perfil. Cuando VS Code pida la clave de API, u
 
 ### Open WebUI
 
-Compila el lanzador una vez y después ábrelo con doble clic:
+Open WebUI se arranca con `Router\LocalLLM-Launcher.exe`. El `.exe` no está en
+el repositorio, así que hay dos formas de conseguirlo:
 
-```powershell
-cd D:\LLM\Router
-Import-Module ps2exe
-Invoke-ps2exe .\webui\LocalLLM-Launcher.ps1 .\LocalLLM-Launcher.exe -title "Local LLM"
-```
+- **Descargarlo (lo más fácil):** baja `LocalLLM-Launcher.exe` de la última
+  [release](https://github.com/robmab/llama-corral/releases) y ponlo en
+  `Router\`. Tiene que estar ahí: localiza el resto del proyecto a partir de su
+  propia ubicación. No está firmado, así que Windows SmartScreen puede avisar la
+  primera vez ("Más información" > "Ejecutar de todas formas").
+- **Compilarlo tú:** el lanzador es un script de PowerShell
+  (`Router\webui\LocalLLM-Launcher.ps1`). [PS2EXE](https://github.com/MScholtes/PS2EXE)
+  lo empaqueta en un `.exe` para abrirlo con doble clic, sin escribir comandos.
+  El resultado es el mismo que el descargado, pero generado en tu equipo. En PowerShell:
 
-`Router\LocalLLM-Launcher.exe` arranca Open WebUI con `uvx` (sin Docker) en
+  ```powershell
+  Install-Module ps2exe -Scope CurrentUser    # solo la primera vez
+  cd D:\LLM\Router
+  Invoke-ps2exe .\webui\LocalLLM-Launcher.ps1 .\LocalLLM-Launcher.exe -title "Local LLM"
+  ```
+
+  Solo hay que recompilar si cambias el `.ps1`.
+
+Ábrelo con doble clic: arranca Open WebUI con `uvx` (sin Docker) en
 `http://localhost:3000`, lo abre en una ventana de navegador dedicada y lo apaga
 al cerrarla. Si `llama start` ya está en marcha, reutiliza ese router, así que VS
 Code y Open WebUI pueden funcionar a la vez. Ajustes recomendados y detalles:

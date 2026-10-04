@@ -101,7 +101,8 @@ recompilar el `.exe`.
 
 ## Compilar el .exe
 
-Hace falta tras clonar (el `.exe` no se sube al repositorio) y después de cambiar el `.ps1`:
+El `.exe` no se sube al repositorio. Descárgalo de las [releases](https://github.com/robmab/llama-corral/releases)
+y ponlo en `Router/`, o compílalo tú (de nuevo si cambias el `.ps1`):
 
 ```powershell
 cd D:\LLM\Router
