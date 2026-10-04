@@ -31,6 +31,11 @@ depend on what else is using the GPU at the time.
    models apart.
 6. **Reasoning is the hidden cost of a local agent.** Long thinking turns, not
    generation speed, decided how long a task took.
+7. **Check the MTP head, not just the quant.** Ornith 1.5 35B ships an untrained
+   MTP head; with a community-retrained one in Q4 it became the best model tested.
+8. **Give the coding agent vision.** Without it, the agent took a screenshot to
+   check its own browser test, could not read it and stopped trusting a test that
+   had passed.
 
 ## 1. Windows degrades VRAM after many restarts
 
@@ -67,14 +72,15 @@ depends on bytes read per token, not on total model size.
 | Qwen 3.8 27B | dense | 27B / 27B | UD-IQ4_XS | 14.3 GB | 9.4 t/s | does not fit |
 | Ornith 1.5 35B-A3B | MoE | 35B / 3B | i1-IQ3_S + MTP | 15.6 GB | 106 → 44 t/s | failed |
 | Ornith 1.5 35B-A3B | MoE | 35B / 3B | Q4_K_M | 21.7 GB | 22-29 t/s | almost |
-| **Qwen 3.6 35B-A3B** | **MoE** | **35B / 3B** | **UD-IQ4_XS + MTP** | **18.2 GB** | **45.7 → 39.7 t/s** | **solved** |
+| Qwen 3.6 35B-A3B | MoE | 35B / 3B | UD-IQ4_XS + MTP | 18.2 GB | 45.7 → 39.7 t/s | solved |
+| **Ornith 1.5 35B-A3B** | **MoE** | **35B / 3B** | **i1-IQ4_XS + retrained MTP** | **19.2 GB** | **52 → 48 t/s** | **solved, best** |
 
 - A dense 27B in IQ3_XXS reads ~10 GB per token, which caps it at ~38 t/s on this
   card, and it collapses as soon as it overflows.
 - A 35B-A3B MoE reads ~1.5-2 GB per token and tolerates experts in RAM: an 18 GB
   Q4 file runs at 45 t/s on 16 GB of VRAM.
-- Quantization matters for agents: the IQ3_S MoE was the fastest but reasoned in
-  circles; the Q4 version of a similar model solved the task.
+- Quantization matters for agents: the same Ornith 35B reasoned in circles in
+  IQ3_S and gave the best result of all in IQ4_XS.
 
 **Hybrid attention makes long context cheap.** Qwen 3.5/3.6 MoE models use full
 attention in only 1 of every 4 layers (the rest is linear attention with a
@@ -111,7 +117,9 @@ The right value is the **lowest N that does not overflow**.
 | 22 | 3.4 s | 46.5 | 43.1 | 42.7 | 12.55 GB (at the limit) |
 | 21 | 3.9 s | 46.2 | 42.7 | 43.3 | 12.66 GB (overflows) |
 
-I chose 23 to leave room for the browser window.
+I chose 23 to leave room for the browser window. Ornith 1.5 35B i1-IQ4_XS, although
+~1 GB bigger, needs the same 23 with vision and only 20 without it (12.12 GB
+dedicated); its generation stays at ~50 t/s for any N between 19 and 24.
 
 ## 4. MTP (multi-token prediction)
 
@@ -124,10 +132,19 @@ step. The output is identical; only speed changes.
 | Qwen 3.8 27B, 131k (does not fit) | 38 / 35 | 27 / 29 | - | worse (3.1 GB overflow) |
 | Qwen 3.6 35B-A3B (N=20 → 22) | 34.5 / 38.6 | 45.7 / 43.2 | 67% | +12-32% |
 | Qwen 3.6, real Copilot session | - | 46.5 avg | 77-90% | code is more predictable |
+| Ornith 1.5 35B, retrained head, real session | - | 50.2 avg | 63% | - |
 
 Values: short context / 30k. Settings: `spec-type = draft-mtp`, `spec-draft-n-max = 2`,
 `spec-draft-p-min = 0.05`. Although the model card warned that MTP did not support
 `--mmproj` yet, with this build MTP and vision work together (acceptance ~60-65%).
+
+**An MTP head can be untrained.** The official Ornith 1.5 35B ships an MTP head
+whose weights look like a fresh random initialization (std 0.020, kurtosis 3,
+reported in the model's discussions and confirmed by two independent groups), so
+its drafts are accepted at chance and MTP can be slower than without it.
+shisa-ai retrained it by KL distillation; quants of that version
+(`Ornith-1.5-35B-A3B-MTP`) accepted 63% of the drafts in the real session. When a
+model card says "MTP", check the acceptance in the server log.
 
 ## 5. Vulkan vs ROCm
 
@@ -151,7 +168,8 @@ analysed afterwards with the server log and the Copilot transcript.
 
 | Model | Requests | Tokens generated | Avg speed | Result |
 |---|---|---|---|---|
-| **Qwen 3.6 35B-A3B IQ4_XS + MTP** | 130 | 38.4k | 46.5 t/s | **solved** |
+| **Ornith 1.5 35B-A3B i1-IQ4_XS + retrained MTP** | 104 | 52.8k | 50.2 t/s | **solved in 2 prompts** (task in ~11 min, follow-up bug in 4.5 min) |
+| Qwen 3.6 35B-A3B IQ4_XS + MTP | 130 | 38.4k | 46.5 t/s | solved |
 | Ornith 1.5 35B-A3B IQ3_S + MTP | 150 | 122k | 52 t/s | failed (thinking turns of 10-14k tokens) |
 | Ornith 1.5 35B-A3B Q4_K_M | 98 | 80k | 22.8 t/s | almost (feature did not work) |
 | Ornith 1.5 9B Q8_0 | 72 | 41k | 54 t/s | loop (one 12,778-token thinking turn) |
@@ -162,6 +180,18 @@ analysed afterwards with the server log and the Copilot transcript.
   request; Qwen 3.6 thinks ~260 characters per turn and acts.
 - **The fastest model was not the quickest to finish.** Ornith IQ3_S generated at
   52 t/s but produced 3x more tokens and did not solve it.
+- **The best run asked before acting.** Ornith IQ4 stopped once to ask a
+  clarifying question, found the z-index conflict between the modal and the emoji
+  panel, and fixed the follow-up bug (a `v-model` that was not updated) on the first
+  try. Its reasoning stayed short: median ~200 characters per turn, one ~8k-token
+  turn for the bug diagnosis, and speed went from 52.5 t/s below 40k to 48.1 above
+  80k of context.
+- **A coding agent without vision cannot check its screenshots.** Asked to test the
+  fix in the browser, it verified twice through the DOM that the bug was gone, then
+  took a screenshot to confirm, could not read it (the coding profile had no
+  `mmproj`) and started doubting a test that had passed. The coding profile now
+  loads the vision projector: same 23 layers in RAM as the general profile, and
+  generation barely changes.
 - **My synthetic agentic test saturated** (three models scored 8/8) and did not
   predict the real result.
 - **Prompt language:** with Spanish prompts, a model mixed Spanish into

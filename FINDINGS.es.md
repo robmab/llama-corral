@@ -32,6 +32,12 @@ salvo que se indique otra cosa, y dependen de qué más esté usando la gráfica
 6. **El razonamiento es el coste oculto de un agente local.** Lo que decidió cuánto
    tardaba una tarea fueron los turnos largos de razonamiento, no la velocidad de
    generación.
+7. **Revisa la cabeza MTP, no solo la cuantización.** Ornith 1.5 35B se publicó con
+   la cabeza MTP sin entrenar; con una reentrenada por la comunidad y en Q4 pasó a
+   ser el mejor modelo probado.
+8. **Dale visión al agente de código.** Sin ella, el agente hizo una captura para
+   comprobar su propia prueba en el navegador, no pudo leerla y dejó de fiarse de
+   una prueba que había pasado.
 
 ## 1. Windows degrada la VRAM tras muchos arranques
 
@@ -67,14 +73,15 @@ velocidad depende de los bytes leídos por token, no del tamaño total del model
 | Qwen 3.8 27B | denso | 27B / 27B | UD-IQ4_XS | 14,3 GB | 9,4 t/s | no cabe |
 | Ornith 1.5 35B-A3B | MoE | 35B / 3B | i1-IQ3_S + MTP | 15,6 GB | 106 → 44 t/s | fallida |
 | Ornith 1.5 35B-A3B | MoE | 35B / 3B | Q4_K_M | 21,7 GB | 22-29 t/s | casi |
-| **Qwen 3.6 35B-A3B** | **MoE** | **35B / 3B** | **UD-IQ4_XS + MTP** | **18,2 GB** | **45,7 → 39,7 t/s** | **resuelta** |
+| Qwen 3.6 35B-A3B | MoE | 35B / 3B | UD-IQ4_XS + MTP | 18,2 GB | 45,7 → 39,7 t/s | resuelta |
+| **Ornith 1.5 35B-A3B** | **MoE** | **35B / 3B** | **i1-IQ4_XS + MTP reentrenada** | **19,2 GB** | **52 → 48 t/s** | **resuelta, la mejor** |
 
 - Un denso de 27B en IQ3_XXS lee ~10 GB por token, lo que lo limita a ~38 t/s en
   esta tarjeta, y se hunde en cuanto desborda.
 - Un MoE 35B-A3B lee ~1,5-2 GB por token y tolera expertos en RAM: un fichero Q4 de
   18 GB va a 45 t/s con 16 GB de VRAM.
-- La cuantización importa en un agente: el MoE en IQ3_S era el más rápido pero
-  razonaba en círculos; la versión Q4 de un modelo parecido resolvió la tarea.
+- La cuantización importa en un agente: el mismo Ornith 35B razonaba en círculos
+  en IQ3_S y dio el mejor resultado de todos en IQ4_XS.
 
 **La atención híbrida abarata el contexto largo.** Los MoE de Qwen 3.5/3.6 solo
 usan atención completa en 1 de cada 4 capas (el resto es atención lineal con un
@@ -111,7 +118,10 @@ la velocidad de texto (mismo modelo con `mmproj-F16` y MTP, VRAM limpia):
 | 22 | 3,4 s | 46,5 | 43,1 | 42,7 | 12,55 GB (al límite) |
 | 21 | 3,9 s | 46,2 | 42,7 | 43,3 | 12,66 GB (desborda) |
 
-Elegí 23 para dejar margen a la ventana del navegador.
+Elegí 23 para dejar margen a la ventana del navegador. Ornith 1.5 35B i1-IQ4_XS,
+aunque pesa ~1 GB más, necesita las mismas 23 con visión y solo 20 sin ella
+(12,12 GB dedicados); su generación se mantiene en ~50 t/s con cualquier N entre
+19 y 24.
 
 ## 4. MTP (predicción de varios tokens)
 
@@ -124,11 +134,20 @@ vez. El resultado es idéntico; solo cambia la velocidad.
 | Qwen 3.8 27B, 131k (no cabe) | 38 / 35 | 27 / 29 | - | peor (desborda 3,1 GB) |
 | Qwen 3.6 35B-A3B (N=20 → 22) | 34,5 / 38,6 | 45,7 / 43,2 | 67 % | +12-32 % |
 | Qwen 3.6, sesión real de Copilot | - | 46,5 de media | 77-90 % | el código es más predecible |
+| Ornith 1.5 35B, cabeza reentrenada, sesión real | - | 50,2 de media | 63 % | - |
 
 Valores: contexto corto / 30k. Ajustes: `spec-type = draft-mtp`,
 `spec-draft-n-max = 2`, `spec-draft-p-min = 0.05`. Aunque la ficha del modelo
 avisaba de que MTP aún no admitía `--mmproj`, con esta build MTP y visión funcionan
 juntos (aceptación ~60-65 %).
+
+**Una cabeza MTP puede venir sin entrenar.** El Ornith 1.5 35B oficial trae una
+cabeza MTP cuyos pesos parecen una inicialización aleatoria (desviación 0,020,
+curtosis 3; lo señalaron en las discusiones del modelo y lo confirmaron dos grupos
+independientes), así que sus borradores se aceptan al azar y MTP puede ir más
+lento que sin él. shisa-ai la reentrenó por destilación KL; las cuantizaciones de
+esa versión (`Ornith-1.5-35B-A3B-MTP`) aceptaron el 63 % de los borradores en la
+sesión real. Si una ficha dice "MTP", comprueba la aceptación en el log del servidor.
 
 ## 5. Vulkan frente a ROCm
 
@@ -153,7 +172,8 @@ La prueba decisiva fue la misma petición de dificultad media en una app Vue gra
 
 | Modelo | Peticiones | Tokens generados | Velocidad media | Resultado |
 |---|---|---|---|---|
-| **Qwen 3.6 35B-A3B IQ4_XS + MTP** | 130 | 38,4k | 46,5 t/s | **resuelta** |
+| **Ornith 1.5 35B-A3B i1-IQ4_XS + MTP reentrenada** | 104 | 52,8k | 50,2 t/s | **resuelta en 2 prompts** (tarea en ~11 min, bug posterior en 4,5 min) |
+| Qwen 3.6 35B-A3B IQ4_XS + MTP | 130 | 38,4k | 46,5 t/s | resuelta |
 | Ornith 1.5 35B-A3B IQ3_S + MTP | 150 | 122k | 52 t/s | fallida (turnos de razonamiento de 10-14k tokens) |
 | Ornith 1.5 35B-A3B Q4_K_M | 98 | 80k | 22,8 t/s | casi (la función no llegó a funcionar) |
 | Ornith 1.5 9B Q8_0 | 72 | 41k | 54 t/s | bucle (un turno de razonamiento de 12.778 tokens) |
@@ -164,6 +184,18 @@ La prueba decisiva fue la misma petición de dificultad media en una app Vue gra
   cada petición; Qwen 3.6 piensa ~260 caracteres por turno y actúa.
 - **El modelo más rápido no fue el que antes terminó.** Ornith IQ3_S generaba a
   52 t/s, pero produjo el triple de tokens y no la resolvió.
+- **La mejor sesión preguntó antes de actuar.** Ornith IQ4 se paró una vez a hacer
+  una pregunta de aclaración, encontró el conflicto de z-index entre el modal y el
+  panel de emojis y corrigió a la primera el bug posterior (un `v-model` que no se
+  actualizaba). Su razonamiento fue corto: mediana de ~200 caracteres por turno, un
+  turno de ~8k tokens para diagnosticar el bug, y la velocidad pasó de 52,5 t/s por
+  debajo de 40k a 48,1 por encima de 80k de contexto.
+- **Un agente de código sin visión no puede revisar sus capturas.** Al pedirle que
+  probara el arreglo en el navegador, comprobó dos veces en el DOM que el bug había
+  desaparecido; después hizo una captura para confirmarlo, no pudo leerla (el perfil
+  de código no cargaba `mmproj`) y empezó a dudar de una prueba que había pasado.
+  Ahora el perfil de código carga el proyector de visión: las mismas 23 capas en RAM
+  que el perfil general, y la generación apenas cambia.
 - **Mi test agéntico sintético se saturó** (tres modelos sacaron 8/8) y no predijo
   el resultado real.
 - **Idioma del prompt:** con prompts en español, un modelo mezclaba español en los
