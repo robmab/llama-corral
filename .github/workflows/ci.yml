@@ -1,0 +1,53 @@
+# Checks that run without a GPU or a llama.cpp server.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the bash scripts
+        run: shellcheck -s bash aliases.sh.example Router/router.sh Router/webui/start-open-webui.sh
+
+  python:
+    name: Python tests (no server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile every test script
+        run: python -m py_compile Tests/*.py
+      - name: Validate the agentic tasks against their reference solutions
+        working-directory: Tests
+        run: python agentic-test.py --selftest
+
+  launcher:
+    name: Open WebUI launcher
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PSScriptAnalyzer (errors only)
+        shell: pwsh
+        run: |
+          $issues = Invoke-ScriptAnalyzer -Path Router/webui/LocalLLM-Launcher.ps1 -Severity Error
+          $issues | Format-Table -AutoSize
+          if ($issues) { exit 1 }
+      - name: Compile with PS2EXE
+        shell: powershell
+        run: |
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser | Out-Null
+          Install-Module ps2exe -Scope CurrentUser -Force
+          Invoke-ps2exe Router/webui/LocalLLM-Launcher.ps1 LocalLLM-Launcher.exe -title "Local LLM"
+          if (-not (Test-Path LocalLLM-Launcher.exe)) { exit 1 }

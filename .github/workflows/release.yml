@@ -1,0 +1,43 @@
+# Builds the Open WebUI launcher from Router/webui/LocalLLM-Launcher.ps1 and attaches
+# it, with its SHA256, to the release. Runs when a release is published, or by hand
+# for an existing release (Actions > Release launcher > Run workflow).
+name: Release launcher
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the existing release to attach the launcher to (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Compile with PS2EXE
+        shell: powershell
+        run: |
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser | Out-Null
+          Install-Module ps2exe -Scope CurrentUser -Force
+          Invoke-ps2exe Router/webui/LocalLLM-Launcher.ps1 LocalLLM-Launcher.exe -title "Local LLM"
+          if (-not (Test-Path LocalLLM-Launcher.exe)) { exit 1 }
+      - name: Write the checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash LocalLLM-Launcher.exe -Algorithm SHA256).Hash.ToLower()
+          [IO.File]::WriteAllText("LocalLLM-Launcher.exe.sha256", "$hash  LocalLLM-Launcher.exe`n")
+          "SHA256: $hash" >> $env:GITHUB_STEP_SUMMARY
+      - name: Attach to the release
+        shell: pwsh
+        run: gh release upload $env:TAG LocalLLM-Launcher.exe LocalLLM-Launcher.exe.sha256 --clobber

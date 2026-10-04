@@ -2,6 +2,8 @@
 
 # llama-corral
 
+[![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
+
 **Un corral para tus LLM locales.** Ten varios modelos preparados y saca el que
 necesites: un único servidor de [llama.cpp](https://github.com/ggml-org/llama.cpp)
 en **modo router** en `localhost:10001`, con un perfil por modelo. Cada petición
@@ -265,7 +267,8 @@ el repositorio, así que hay dos formas de conseguirlo:
 - **Descargarlo (lo más fácil):** baja `LocalLLM-Launcher.exe` de la última
   [release](https://github.com/robmab/llama-corral/releases) y ponlo en
   `Router\`. Tiene que estar ahí: localiza el resto del proyecto a partir de su
-  propia ubicación. No está firmado, así que Windows SmartScreen puede avisar la
+  propia ubicación. GitHub Actions lo compila a partir del `.ps1` en cada release
+  y publica su SHA256 al lado. No está firmado, así que Windows SmartScreen puede avisar la
   primera vez ("Más información" > "Ejecutar de todas formas").
 - **Compilarlo tú:** el lanzador es un script de PowerShell
   (`Router\webui\LocalLLM-Launcher.ps1`). [PS2EXE](https://github.com/MScholtes/PS2EXE)

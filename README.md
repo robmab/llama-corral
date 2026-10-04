@@ -2,6 +2,8 @@
 
 # llama-corral
 
+[![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
+
 **A corral for your local LLMs.** Keep several models ready and bring out the one
 you need: a single [llama.cpp](https://github.com/ggml-org/llama.cpp) server in
 **router mode** on `localhost:10001`, with one profile per model. Each request
@@ -262,7 +264,8 @@ the repo, so get it in one of two ways:
 - **Download it (easiest):** take `LocalLLM-Launcher.exe` from the latest
   [release](https://github.com/robmab/llama-corral/releases) and put it in
   `Router\`. It must live there: it finds the rest of the project from its own
-  location. It is not signed, so Windows SmartScreen may warn the first time
+  location. GitHub Actions builds it from the `.ps1` on every release and
+  publishes its SHA256 next to it. It is not signed, so Windows SmartScreen may warn the first time
   ("More info" > "Run anyway").
 - **Compile it yourself:** the launcher is a PowerShell script
   (`Router\webui\LocalLLM-Launcher.ps1`). [PS2EXE](https://github.com/MScholtes/PS2EXE)

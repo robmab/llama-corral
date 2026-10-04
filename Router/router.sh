@@ -25,6 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_BUILD="${SERVER_BUILD:-}"
 CONF="$SCRIPT_DIR/../llm.conf"
 if [ -f "$CONF" ]; then
+    # shellcheck source=/dev/null
     . "$CONF"
 elif [ -z "$ENV_BUILD" ]; then
     echo "Missing $CONF. Create it from the example:  cp llm.conf.example llm.conf  (and set SERVER_BUILD)"
@@ -37,7 +38,7 @@ PRESETS="$SCRIPT_DIR/models.ini"
 [ -f "$PRESETS" ] || { echo "Missing $PRESETS. Create it from the example:  cp models.ini.example models.ini  (and set your models)"; exit 1; }
 
 SERVER_DIR="$(cd "$SCRIPT_DIR/../Servers/$SERVER_BUILD" && pwd)" || { echo "Build not found: $SCRIPT_DIR/../Servers/$SERVER_BUILD"; exit 1; }
-cd "$SERVER_DIR"
+cd "$SERVER_DIR" || exit 1
 echo "Router: $SERVER_DIR  ->  presets $PRESETS"
 
 ./llama-server.exe \
