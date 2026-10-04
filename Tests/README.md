@@ -1,3 +1,5 @@
+**English** | [Español](README.es.md)
+
 # Tests
 
 All of them talk to the router (`llama start`) and accept `--model` with the id

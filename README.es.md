@@ -182,7 +182,7 @@ llama stop
 4. Con visión: `llama test vision --model <id>`.
 5. En modelos MoE, busca el `n-cpu-moe` **más bajo** que siga diciendo OK tras la
    prueba de velocidad: con menos se desborda y va más lento. Procedimiento en
-   [Tests/README.md](Tests/README.md).
+   [Tests/README.es.md](Tests/README.es.md).
 6. Opcional: compara la calidad con `llama test reasoning` y `llama test agentic`.
 
 ## 8. Conectar los clientes
@@ -273,4 +273,4 @@ Para cambiar los parámetros de un modelo: edita su sección en
   razonamiento largo es el principal coste de un agente local; las pruebas
   sintéticas se saturan y lo que distingue a los modelos es una tarea real.
 - Más detalle: [Router/webui/README.es.md](Router/webui/README.es.md) (router y
-  Open WebUI) y [Tests/README.md](Tests/README.md) (pruebas y ajuste).
+  Open WebUI) y [Tests/README.es.md](Tests/README.es.md) (pruebas y ajuste).
