@@ -1,30 +1,37 @@
-# Local LLM: llama.cpp router for VS Code and Open WebUI
+**English** | [Español](README.es.md)
 
-A single server on `:10001` with one profile per model. Each request carries the
-model name and the router loads that profile, unloading the previous one (two
-models are never in VRAM at once). Copilot and Open WebUI switch models on their
-own when a model is picked in their selector.
+# Router and Open WebUI
 
-Profiles live in `Router/models.ini` (local, not committed). Start from
-`Router/models.ini.example`. Each section name is a model id, and it must match
-the id configured in each client (`"model"` field).
+How the llama.cpp router works and how to use it from VS Code and Open WebUI.
+For the initial setup (example files, builds and models), see the
+[main README](../../README.md).
 
-## Setup after cloning
+## How the router works
 
-```bash
-cp llm.conf.example llm.conf                        # set SERVER_BUILD
-cp Router/models.ini.example Router/models.ini      # set your models
-cp aliases.sh.example aliases.sh                    # set LLM and DEFAULT_MODEL
-```
+`Router/router.sh` starts `llama-server` with no model of its own and with
+`--models-preset Router/models.ini`, which turns it into a router on `:10001`:
 
-1. Put a llama.cpp build in `Servers/` and the `.gguf` files in `Models/`.
-2. Load the aliases from `C:\Program Files\Git\etc\profile.d\aliases.sh`:
-   `[ -f /d/LLM/aliases.sh ] && . /d/LLM/aliases.sh` (with your path).
-3. Compile the launcher (see below) if you want the Open WebUI double-click.
+1. A client (Copilot, Open WebUI) sends a request with `"model": "<id>"`.
+2. The router looks for the section `[<id>]` in `models.ini`.
+3. If that profile is not loaded, it unloads the current one (`--models-max 1`)
+   and starts a child `llama-server` with the section's flags on an internal port.
+4. It forwards the request to that child.
 
-## Usage
+Consequences:
 
-**VS Code (Copilot):** start the router from Git Bash and pick the model in Copilot.
+- The client's model `id` and the section name must be **identical**.
+- Every model is a separate process: to stop everything, stop every
+  `llama-server`, not only the one listening on `:10001` (`llama stop` does it).
+- Switching models takes as long as loading the new one (seconds).
+- Every switch is a new load into VRAM. After many switches Windows can degrade
+  the VRAM: if everything gets slow, `llama vram` confirms it and a reboot fixes it.
+- `router.sh` reads the active build from `llm.conf` (`SERVER_BUILD`). A
+  `SERVER_BUILD` environment variable takes precedence, to try a build once.
+
+## VS Code (Copilot)
+
+Copilot cannot start processes, so start the router first and then pick the model
+in Copilot:
 
 ```bash
 llama start                      # router + DEFAULT_MODEL preloaded
@@ -33,35 +40,53 @@ llama status                     # which model is loaded
 llama stop                       # stop everything
 ```
 
-**Open WebUI:** double-click `Router\LocalLLM-Launcher.exe`.
-- If `llama start` is already running, it reuses that router and, when its
-  window is closed, only shuts down Open WebUI (VS Code keeps working).
-- If there is no router, it starts one and stops it on exit.
-- If another llama-server that is not the router is running, it stops it and
-  starts the router.
+## Open WebUI
 
-Both can be used at the same time. If they ask for different models at once, the
-router switches back and forth on every request (each switch takes seconds).
+Double-click `Router\LocalLLM-Launcher.exe`. It:
+
+1. Reuses the router if `llama start` is already running. If another
+   llama-server that is not the router is running, it stops it and starts the
+   router with a hidden window.
+2. Starts Open WebUI in the background (`start-open-webui.sh`, with `uvx`, no
+   Docker) and shows its progress until it answers on `:3000`.
+3. Opens a dedicated browser window (`--app` with its own Chromium/Edge/Brave
+   profile), without tabs or address bar.
+4. Hides its console and waits for that window to close.
+5. On close, it shuts down Open WebUI and, only if it started it, the router.
+
+VS Code and Open WebUI can be used at the same time. If they ask for different
+models at once, the router switches back and forth on every request.
+
+### Recommended Open WebUI settings (once, in Admin Panel)
+
+- **Hide coding-only profiles** (Settings > Models) so only the general-purpose
+  ones show up in the selector.
+- **Task model = current model** (Settings > Interface). If it points to another
+  model, every chat title triggers a model switch.
+- **Disable secondary tasks** (same screen): follow-up suggestions, tags and
+  autocomplete. With reasoning enabled, each one thinks before answering and uses
+  the GPU on every message.
+
+### start-open-webui.sh
+
+| Variable | Value |
+|---|---|
+| `DATA_DIR` | `C:/open-webui/data` (users, chats and settings) |
+| `OPENAI_API_BASE_URL` | `http://localhost:10001/v1` |
+| `OPENAI_API_KEY` | `apikey` |
+| `ENABLE_WEB_SEARCH` / `WEB_SEARCH_ENGINE` | `true` / `duckduckgo` |
+| `ENABLE_TAGS / AUTOCOMPLETE / FOLLOW_UP_GENERATION` | `false` |
+
+Most of them only apply to a fresh install: they are stored in the database when
+it is created, and from then on the Admin Panel settings win.
 
 ## Files
 
-Repo layout:
-
-```
-Models\     one .gguf (and its mmproj) per model, no scripts
-Router\     router.sh, models.ini, Open WebUI launcher
-Servers\    llama.cpp builds (active one: SERVER_BUILD in llm.conf, or "llama server")
-Tests\      tests ("llama test")
-llm.conf    general configuration (active build)
-aliases.sh  Git Bash aliases ("llama" command)
-```
-
-Inside `Router\webui\`:
-
 ```
 ../router.sh                    llama-server in router mode (:10001)
-../models.ini                   one section per model with its parameters
-../LocalLLM-Launcher.exe        Open WebUI launcher (double-click)
+../models.ini                   one section per model with its parameters   [local]
+../models.ini.example           template
+../LocalLLM-Launcher.exe        Open WebUI launcher (double-click)          [compiled]
 LocalLLM-Launcher.ps1           launcher source
 start-open-webui.sh             starts Open WebUI (uvx, no Docker) against :10001
 logs/router.log                 router output when started with "llama start"
@@ -69,25 +94,15 @@ logs/launcher-llama.log         router output when started by the launcher
 logs/launcher-webui.log         Open WebUI output
 ```
 
-## Recommended Open WebUI settings (once)
-
-- **Hide coding-only profiles:** Admin Panel > Settings > Models, disable them so
-  only the general-purpose profiles show up in the selector.
-- **Task model** (titles, etc.) = current model (Admin Panel > Settings >
-  Interface). If it points to another model, every title triggers a model switch.
-- **Disable secondary tasks** that use the GPU on every message (same screen):
-  follow-up suggestions, tags and autocomplete.
-
 ## Changing a model's parameters
 
 Edit its section in `models.ini` (keys are llama-server flags without the leading
-dashes) and restart the router (`llama stop` + `llama start`). There is no need
-to recompile the `.exe`.
+dashes) and restart the router (`llama stop` + `llama start`). There is no need to
+recompile the `.exe`.
 
 ## Compiling the .exe
 
-Only needed after changing the `.ps1` (or after cloning, since the `.exe` is not
-committed):
+Needed after cloning (the `.exe` is not committed) and after changing the `.ps1`:
 
 ```powershell
 cd D:\LLM\Router
@@ -95,11 +110,15 @@ Import-Module ps2exe      # first time: Install-Module ps2exe -Scope CurrentUser
 Invoke-ps2exe .\webui\LocalLLM-Launcher.ps1 .\LocalLLM-Launcher.exe -title "Local LLM"
 ```
 
-## Notes
+The launcher works out the `Router` folder from its own location, so it does not
+depend on where the repo is cloned.
 
-- Every model switch is a new load into VRAM. After many switches Windows can
-  degrade the VRAM: if everything gets slow, `llama vram` confirms it and a
-  reboot fixes it.
-- Models are only used through the router: their folders contain only the
-  `.gguf` and the `mmproj`. All the configuration is in `models.ini`.
-- Tests to check or tune a model: `llama test` (see `Tests/README.md`).
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Open WebUI "starts" instantly but talks to another model | Another Open WebUI was still running on `:3000` | Close its window first; use one launcher at a time |
+| Environment variables have no effect | They are only read when the database is created | Change them in Admin Panel > Settings |
+| A `.webui_secret_key` file appears in `Router/` | Open WebUI stores its session key in the folder it starts from | Normal; if deleted, you have to log in again |
+| Slow answers on every message | Secondary tasks (titles, tags, follow-ups) using another model or reasoning | Recommended settings above |
+| The launcher waits and gives up on llama-server | Missing local file, wrong build or a model error | Check `logs/launcher-llama.log` |
