@@ -275,3 +275,7 @@ To change a model's parameters: edit its section in `Router/models.ini`, then
   of a local agent; synthetic tests saturate, a real task tells models apart.
 - More detail: [Router/webui/README.md](Router/webui/README.md) (router and
   Open WebUI) and [Tests/README.md](Tests/README.md) (tests and tuning).
+
+## License
+
+[MIT](LICENSE). llama.cpp, Open WebUI and the models keep their own licenses.

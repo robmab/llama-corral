@@ -278,3 +278,7 @@ Para cambiar los parámetros de un modelo: edita su sección en
   sintéticas se saturan y lo que distingue a los modelos es una tarea real.
 - Más detalle: [Router/webui/README.es.md](Router/webui/README.es.md) (router y
   Open WebUI) y [Tests/README.es.md](Tests/README.es.md) (pruebas y ajuste).
+
+## Licencia
+
+[MIT](LICENSE). llama.cpp, Open WebUI y los modelos mantienen sus propias licencias.
