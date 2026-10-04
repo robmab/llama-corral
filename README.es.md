@@ -17,6 +17,36 @@ Este README explica la instalación paso a paso. Las mediciones en las que se ba
 la configuración (denso frente a MoE, VRAM en Windows, MTP, Vulkan frente a ROCm,
 una tarea real de agente) están en [FINDINGS.es.md](FINDINGS.es.md).
 
+## Por qué llama-corral
+
+Herramientas como Ollama o LM Studio ya cargan modelos bajo demanda, y las
+aplicaciones de escritorio ya abren un chat con doble clic. Lo que aporta
+llama-corral es cómo encajan las piezas en un mismo equipo:
+
+- **Un servidor para el editor y el chat.** VS Code Copilot y Open WebUI hablan con
+  el mismo router y los mismos perfiles. Eliges un modelo en cualquiera de los dos
+  selectores y el router lo cambia; los dos pueden usarse a la vez.
+- **Un chat que recoge al cerrar.** El lanzador abre Open WebUI en una ventana
+  propia, reutiliza el router si ya está en marcha y, al cerrar la ventana, apaga
+  Open WebUI y, si los arrancó él, el router y el modelo, así que la VRAM queda
+  libre. Sin Docker.
+- **Control total de cada modelo.** Los perfiles son flags de llama.cpp: capas de
+  expertos en RAM (`n-cpu-moe`), decodificación especulativa con MTP, tipo de caché
+  KV, límite de razonamiento y proyector de visión por perfil. Pueden convivir
+  varias builds de llama.cpp.
+- **Pruebas para ajustar, no adivinar.** Velocidad a 2k / 32k / 64k, visión,
+  barrido de contexto, muestreo, razonamiento y pruebas agénticas, además de
+  `llama vram`, que detecta cuándo Windows ha mandado el modelo a memoria compartida.
+- **Pensado para Windows, Git Bash y Vulkan**, probado en una tarjeta AMD, cuando
+  la mayoría de herramientas asumen Linux o NVIDIA.
+- **Cada decisión está medida.** [FINDINGS.es.md](FINDINGS.es.md) recoge los datos
+  en los que se basa la configuración.
+
+Si buscas lo más sencillo, Ollama o LM Studio son más fáciles. Si solo necesitas
+cambiar de modelo delante de llama.cpp, [llama-swap](https://github.com/mostlygeek/llama-swap)
+hace eso. llama-corral es para exprimir una GPU, con un editor y un chat
+compartiéndola.
+
 ## Contenido
 
 1. [Requisitos](#1-requisitos)

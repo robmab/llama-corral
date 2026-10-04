@@ -17,6 +17,35 @@ This README walks through the setup step by step. The measurements behind the
 configuration (dense vs MoE, VRAM on Windows, MTP, Vulkan vs ROCm, a real agent
 task) are in [FINDINGS.md](FINDINGS.md).
 
+## Why llama-corral
+
+Tools like Ollama or LM Studio already load models on demand, and desktop apps
+already open a chat with a double click. What llama-corral adds is how the pieces
+fit together on one machine:
+
+- **One server for the editor and the chat.** VS Code Copilot and Open WebUI talk
+  to the same router and the same profiles. Pick a model in either selector and
+  the router swaps it; both can work at the same time.
+- **A chat that cleans up after itself.** The launcher opens Open WebUI in a
+  dedicated window, reuses the router if it is already running, and when you close
+  the window it shuts down Open WebUI and, if it started them, the router and the
+  model, so the VRAM is free again. No Docker.
+- **Full control of each model.** Profiles are plain llama.cpp flags: expert layers
+  in RAM (`n-cpu-moe`), MTP speculative decoding, KV cache type, reasoning budget,
+  a vision projector per profile. Several llama.cpp builds can live side by side.
+- **Tests to tune it, not guess.** Speed at 2k / 32k / 64k, vision, context sweep,
+  sampling, reasoning and agentic tests, plus `llama vram`, which detects when
+  Windows has pushed the model into shared memory.
+- **Built for Windows, Git Bash and Vulkan**, tested on an AMD card, where most
+  tools assume Linux or NVIDIA.
+- **Every choice is measured.** [FINDINGS.md](FINDINGS.md) has the numbers behind
+  the configuration.
+
+If you want the simplest setup, Ollama or LM Studio are easier. If you only need
+model swapping in front of llama.cpp, [llama-swap](https://github.com/mostlygeek/llama-swap)
+does that. llama-corral is for getting the most out of one GPU, with an editor and
+a chat sharing it.
+
 ## Contents
 
 1. [Requirements](#1-requirements)
