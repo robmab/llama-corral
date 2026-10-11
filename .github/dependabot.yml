@@ -1,0 +1,9 @@
+# Opens a PR when a newer version of an action used in .github/workflows comes out.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
