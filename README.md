@@ -1,6 +1,6 @@
 **English** | [Español](README.es.md)
 
-<p align="center"><img src="docs/images/corral.svg" alt="The release codenames as camelids in a corral: Alpaca, Bactriano, Cria, Dromedario and a Guanaco too big to get in" width="100%"></p>
+<p align="center"><img src="docs/images/Llamas%20en%20el%20corral%20de%20modelos.png" alt="Five llamas in a barn under the LLAMA-CORRAL sign, one per release codename: Alpaca (v0.1, shipped), Bactriano (v0.2, next), a baby Cria loading 42% (v0.3), Dromedario with MTP goggles (v0.4) and a crowned Guanaco too big to fit in 16 GB (v0.5, someday). The router sign reads port 10001" width="100%"></p>
 
 [![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/robmab/llama-corral)](https://github.com/robmab/llama-corral/releases)

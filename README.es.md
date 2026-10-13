@@ -1,6 +1,6 @@
 [English](README.md) | **Español**
 
-<p align="center"><img src="docs/images/corral.svg" alt="Los nombres de las versiones como camélidos en un corral: Alpaca, Bactriano, Cria, Dromedario y un Guanaco demasiado grande para entrar" width="100%"></p>
+<p align="center"><img src="docs/images/Llamas%20en%20el%20corral%20de%20modelos.png" alt="Cinco llamas en un establo bajo el cartel LLAMA-CORRAL, una por nombre de versión: Alpaca (v0.1, publicada), Bactriano (v0.2, la siguiente), una Cría cargando al 42 % (v0.3), Dromedario con gafas MTP (v0.4) y un Guanaco con corona demasiado grande para caber en 16 GB (v0.5, algún día). El cartel del router dice puerto 10001" width="100%"></p>
 
 [![CI](https://github.com/robmab/llama-corral/actions/workflows/ci.yml/badge.svg)](https://github.com/robmab/llama-corral/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/robmab/llama-corral)](https://github.com/robmab/llama-corral/releases)
